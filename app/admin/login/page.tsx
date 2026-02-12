@@ -1,9 +1,12 @@
-"use client";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-import { useState } from "react";
+("use client");
+
+import React, { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-export default function AdminLoginPage() {
+function AdminLoginInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const nextPath = sp.get("next") || "/admin";
@@ -94,5 +97,13 @@ export default function AdminLoginPage() {
         </form>
       </div>
     </main>
+  );
+}
+
+export default function AdminLoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminLoginInner />
+    </Suspense>
   );
 }
