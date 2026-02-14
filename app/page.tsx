@@ -6,6 +6,7 @@ import { Card } from "./components/Card";
 import { ImageSlider } from "./components/ImageSlider";
 import { formatIDR } from "./lib/idr";
 import { PopupOverlay } from "./components/PopupOverlay";
+import { sanitizeHtml } from "./lib/sanitize.client";
 
 type PostItem = {
   id: string;
@@ -39,7 +40,7 @@ function formatDateTimeDMY12H(iso: string) {
 function getOrderValue(fields?: Record<string, string>) {
   const raw = fields?.["display_order"];
   const n = raw !== undefined ? Number(raw) : NaN;
-  return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER; // kosong = paling bawah
+  return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
 }
 
 function DonationView({
@@ -105,6 +106,133 @@ type PopupPost = Omit<PostItem, "media_type"> & {
   media_type?: "popup_images" | "popup_video" | null;
 };
 
+const SCHEDULE_KEY = "schedule_json";
+
+type ScheduleRow = {
+  dayName: string; // "Rabu"
+  hijriahDay: number; // 1..30
+  dateM: string; // "2026-02-18" (ISO date)
+  imamName: string; // "Ust. ..."
+};
+
+function parseSchedule(fields?: Record<string, string>): ScheduleRow[] {
+  const raw = (fields?.[SCHEDULE_KEY] || "").trim();
+  if (!raw) return [];
+
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+
+    return arr
+      .map((x) => ({
+        dayName: String(x?.dayName ?? "").trim(),
+        // fallback: hijriahDay OR hijirahDay (untuk kompatibilitas typo lama)
+        hijriahDay: Number(x?.hijriahDay ?? x?.hijirahDay ?? 0),
+        dateM: String(x?.dateM ?? "").trim(),
+        imamName: String(x?.imamName ?? "").trim(),
+      }))
+      .filter((r) => r.dayName || r.imamName || r.dateM || r.hijriahDay)
+      .sort((a, b) => {
+        const da = Number(a.hijriahDay || 0);
+        const db = Number(b.hijriahDay || 0);
+        if (da && db && da !== db) return da - db;
+
+        if (a.dateM && b.dateM) return a.dateM.localeCompare(b.dateM);
+        if (a.dateM) return -1;
+        if (b.dateM) return 1;
+
+        return 0;
+      });
+  } catch {
+    return [];
+  }
+}
+
+function formatDateID(dateISO: string) {
+  // dateISO = "YYYY-MM-DD"
+  const d = new Date(`${dateISO}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return dateISO;
+
+  return d.toLocaleDateString("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function ScheduleTable({
+  rows,
+  title,
+  caption,
+}: {
+  rows: ScheduleRow[];
+  title: string;
+  caption?: string;
+}) {
+  if (!rows.length) return null;
+
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+      <div className="text-sm font-semibold text-zinc-900">{title}</div>
+
+      {caption ? (
+        <div className="mt-1 text-xs text-zinc-500">{caption}</div>
+      ) : null}
+
+      <div className="mt-4 overflow-x-auto">
+        <table className="min-w-[720px] w-full border-collapse">
+          <thead className="bg-zinc-50 text-xs text-zinc-600">
+            <tr>
+              <th className="p-2 text-left">Hari</th>
+              <th className="p-2 text-left">Hijriah (1447H)</th>
+              <th className="p-2 text-left">Masehi (2026M)</th>
+              <th className="p-2 text-left">Nama</th>
+            </tr>
+          </thead>
+
+          <tbody className="divide-y divide-zinc-200 text-sm">
+            {rows.map((r, idx) => (
+              <tr key={idx} className="align-top">
+                <td className="p-2 font-medium text-zinc-900">
+                  {r.dayName || "-"}
+                </td>
+                <td className="p-2 text-zinc-700">
+                  {r.hijriahDay ? r.hijriahDay : "-"}
+                </td>
+                <td className="p-2 text-zinc-700">
+                  {r.dateM ? formatDateID(r.dateM) : "-"}
+                </td>
+                <td className="p-2 text-zinc-900">{r.imamName || "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Description (rich text) renderer
+ * - sanitizeHtml() menjaga konten aman
+ * - className "richtext" biar ga perlu typography plugin
+ */
+function DescriptionView({ html }: { html: string }) {
+  const safe = sanitizeHtml(html || "");
+  return (
+    <div
+      className={[
+        "prose prose-zinc max-w-none",
+        "prose-p:my-2 prose-li:my-1",
+        "prose-a:text-zinc-900 prose-a:underline",
+        "prose-strong:text-zinc-900",
+        "prose-blockquote:border-l-zinc-200 prose-blockquote:text-zinc-600",
+      ].join(" ")}
+      dangerouslySetInnerHTML={{ __html: safe }}
+    />
+  );
+}
+
 export default function HomePage() {
   const apiBase = process.env.NEXT_PUBLIC_API_BASE!;
   const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL!;
@@ -114,10 +242,7 @@ export default function HomePage() {
     return [...posts].sort((a, b) => {
       const oa = getOrderValue(a.fields);
       const ob = getOrderValue(b.fields);
-
       if (oa !== ob) return oa - ob;
-
-      // tie-breaker: updated terbaru dulu
       return (
         new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
       );
@@ -187,7 +312,8 @@ export default function HomePage() {
   return (
     <main className="space-y-6">
       <PopupOverlay post={popupPost} />
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+
+      {/* <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
             Masjid Al-Ukhuwah
@@ -197,14 +323,7 @@ export default function HomePage() {
             Ciwaruga, Kec. Parongpong, Kab. Bandung Barat, Jawa Barat - 40559
           </p>
         </div>
-
-        {/* <a
-          href="/admin"
-          className="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-900 shadow-sm hover:bg-zinc-50"
-        >
-          CMS
-        </a> */}
-      </header>
+      </header> */}
 
       <div className="grid gap-4 md:grid-cols-2">
         {frontpagePosts.map((p) => {
@@ -223,8 +342,6 @@ export default function HomePage() {
             })
             .filter((x) => x.t || x.d);
 
-          const headline = getVal(p.fields, "title_1") || "Untitled";
-
           const hasDonation =
             getVal(p.fields, "infak_title").length > 0 ||
             Number(p.fields?.["infak_amount"] || 0) > 0 ||
@@ -239,16 +356,23 @@ export default function HomePage() {
             (p.fields?.["zakat_target_enabled"] === "true" &&
               Number(p.fields?.["zakat_target_amount"] || 0) > 0);
 
+          const scheduleRows = parseSchedule(p.fields);
+          const hasSchedule = scheduleRows.length > 0;
+
+          const scheduleSectionTitle =
+            getVal(p.fields, "schedule_section_title") || "Schedule";
+
+          const scheduleSectionCaption =
+            getVal(p.fields, "schedule_section_caption") || "";
+
           return (
             <div key={p.id} className={fullSpan ? "md:col-span-2" : ""}>
               <Card>
                 <div className="space-y-4">
-                  <div>
-                    {/* <div className="text-lg font-semibold">{headline}</div> */}
-                    <div className="mt-1 text-xs text-zinc-500">
-                      Updated: {formatDateTimeDMY12H(p.updated_at)}
-                    </div>
+                  <div className="mt-1 text-xs text-zinc-500">
+                    Updated: {formatDateTimeDMY12H(p.updated_at)}
                   </div>
+
                   {mediaUrls.length > 0 && mediaType === "images" ? (
                     <ImageSlider urls={mediaUrls} intervalMs={4000} />
                   ) : mediaUrls.length > 0 && mediaType === "video" ? (
@@ -265,7 +389,7 @@ export default function HomePage() {
                       </div>
                     </div>
                   ) : null}
-                  {/* Donation cards */}
+
                   {hasDonation ? (
                     <div className="grid gap-3 sm:grid-cols-1">
                       <DonationView
@@ -285,33 +409,44 @@ export default function HomePage() {
                       />
                     </div>
                   ) : null}
+
+                  {/* Schedule (only if exists) */}
+                  {hasSchedule ? (
+                    <ScheduleTable
+                      rows={scheduleRows}
+                      title={scheduleSectionTitle}
+                      caption={scheduleSectionCaption}
+                    />
+                  ) : null}
+
+                  {/* Blocks */}
                   {blocks.length > 0 ? (
                     <div className="grid gap-2">
                       {blocks.map((b) => (
                         <div
                           key={b.n}
-                          className="rounded-xl border border-zinc-200 bg-zinc-50 p-3"
+                          className="rounded-xl border border-zinc-200 bg-zinc-50 p-4"
                         >
                           {b.t ? (
                             <div className="text-2xl font-semibold text-zinc-900">
                               {b.t}
                             </div>
                           ) : null}
+
                           {b.d ? (
-                            <div
-                              className={`mt-1 text-md text-zinc-700 ${b.t ? "" : "mt-0"}`}
-                            >
-                              {b.d}
+                            <div className={`${b.t ? "mt-2" : ""}`}>
+                              <DescriptionView html={b.d} />
                             </div>
                           ) : null}
                         </div>
                       ))}
                     </div>
-                  ) : (
-                    <div className="text-sm text-zinc-500">
-                      Tidak ada title/description yang diisi.
-                    </div>
-                  )}
+                  ) : null}
+                  {/* (
+                     <div className="text-sm text-zinc-500">
+                       Tidak ada title/description yang diisi.
+                     </div>
+                   )} */}
                 </div>
               </Card>
             </div>
