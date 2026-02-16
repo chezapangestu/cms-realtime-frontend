@@ -102,7 +102,7 @@ export function ScheduleEditor({
   }
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+    <div className="rounded-2xl border border-zinc-200 bg-white p-4 overflow-auto">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-sm font-semibold text-zinc-900">Jadwal</div>
