@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { io, Socket } from "socket.io-client";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { Card } from "./components/Card";
 import { ImageSlider } from "./components/ImageSlider";
 import { formatIDR } from "./lib/idr";
 import { PopupOverlay } from "./components/PopupOverlay";
 import { sanitizeHtml } from "./lib/sanitize.client";
+import { getSocket } from "./lib/socket.client";
 
 type PostItem = {
   id: string;
@@ -34,12 +34,15 @@ function formatDateTimeDMY12H(iso: string) {
   const sec = String(d.getSeconds()).padStart(2, "0");
   const ampm = hh24 >= 12 ? "PM" : "AM";
 
-  return `${dd}/${mm}/${yyyy}, ${String(hh12).padStart(2, "0")}:${min}:${sec} ${ampm}`;
+  return `${dd}/${mm}/${yyyy}, ${String(hh12).padStart(
+    2,
+    "0",
+  )}:${min}:${sec} ${ampm}`;
 }
 
 function getOrderValue(fields?: Record<string, string>) {
   const raw = fields?.["display_order"];
-  const n = raw !== undefined ? Number(raw) : NaN;
+  const n = raw !== undefined ? Number(raw) : Number.NaN;
   return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
 }
 
@@ -59,7 +62,6 @@ function DonationView({
 
   const hasAnything =
     title.length > 0 || amount > 0 || (targetEnabled && target > 0);
-
   if (!hasAnything) return null;
 
   const progress =
@@ -109,10 +111,10 @@ type PopupPost = Omit<PostItem, "media_type"> & {
 const SCHEDULE_KEY = "schedule_json";
 
 type ScheduleRow = {
-  dayName: string; // "Rabu"
-  hijriahDay: number; // 1..30
-  dateM: string; // "2026-02-18" (ISO date)
-  imamName: string; // "Ust. ..."
+  dayName: string;
+  hijriahDay: number;
+  dateM: string; // YYYY-MM-DD
+  imamName: string;
 };
 
 function parseSchedule(fields?: Record<string, string>): ScheduleRow[] {
@@ -126,7 +128,6 @@ function parseSchedule(fields?: Record<string, string>): ScheduleRow[] {
     return arr
       .map((x) => ({
         dayName: String(x?.dayName ?? "").trim(),
-        // fallback: hijriahDay OR hijirahDay (untuk kompatibilitas typo lama)
         hijriahDay: Number(x?.hijriahDay ?? x?.hijirahDay ?? 0),
         dateM: String(x?.dateM ?? "").trim(),
         imamName: String(x?.imamName ?? "").trim(),
@@ -140,7 +141,6 @@ function parseSchedule(fields?: Record<string, string>): ScheduleRow[] {
         if (a.dateM && b.dateM) return a.dateM.localeCompare(b.dateM);
         if (a.dateM) return -1;
         if (b.dateM) return 1;
-
         return 0;
       });
   } catch {
@@ -149,7 +149,6 @@ function parseSchedule(fields?: Record<string, string>): ScheduleRow[] {
 }
 
 function formatDateID(dateISO: string) {
-  // dateISO = "YYYY-MM-DD"
   const d = new Date(`${dateISO}T00:00:00`);
   if (Number.isNaN(d.getTime())) return dateISO;
 
@@ -212,11 +211,6 @@ function ScheduleTable({
   );
 }
 
-/**
- * Description (rich text) renderer
- * - sanitizeHtml() menjaga konten aman
- * - className "richtext" biar ga perlu typography plugin
- */
 function DescriptionView({ html }: { html: string }) {
   const safe = sanitizeHtml(html || "");
   return (
@@ -234,9 +228,72 @@ function DescriptionView({ html }: { html: string }) {
 }
 
 export default function HomePage() {
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE!;
-  const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL!;
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE || "";
   const [posts, setPosts] = useState<PostItem[]>([]);
+
+  const fetchPosts = useCallback(async () => {
+    if (!apiBase) return;
+    try {
+      const res = await fetch(`${apiBase}/posts`, { cache: "no-store" });
+      const data = await res.json();
+      setPosts(Array.isArray(data) ? data : []);
+    } catch {}
+  }, [apiBase]);
+
+  // fetch awal
+  useEffect(() => {
+    fetchPosts();
+  }, [fetchPosts]);
+
+  // socket listeners (stable singleton)
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+
+    const onConnect = () => {
+      console.log("[socket] connected", socket.id);
+      fetchPosts(); // sync ulang setelah reconnect
+    };
+    const onDisconnect = (r: any) => console.log("[socket] disconnected", r);
+    const onConnectError = (e: any) =>
+      console.log("[socket] connect_error", e?.message || e);
+
+    const onUpsert = (post: PostItem) => {
+      console.log("[socket] post:upsert", post?.id, post?.updated_at);
+      if (!post?.id) return;
+      setPosts((prev) => {
+        const idx = prev.findIndex((p) => p.id === post.id);
+        if (idx === -1) return [post, ...prev];
+        const copy = [...prev];
+        copy[idx] = post;
+        return copy;
+      });
+    };
+
+    const onDelete = ({ id }: { id: string }) => {
+      console.log("[socket] post:delete", id);
+      if (!id) return;
+      setPosts((prev) => prev.filter((p) => p.id !== id));
+    };
+
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    socket.on("connect_error", onConnectError);
+
+    socket.on("post:upsert", onUpsert);
+    socket.on("post:delete", onDelete);
+
+    return () => {
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+      socket.off("connect_error", onConnectError);
+
+      socket.off("post:upsert", onUpsert);
+      socket.off("post:delete", onDelete);
+
+      // jangan disconnect: biar koneksi tetap hidup
+    };
+  }, [fetchPosts]);
 
   const sortedPosts = useMemo(() => {
     return [...posts].sort((a, b) => {
@@ -254,19 +311,6 @@ export default function HomePage() {
       (p) => p.media_type !== "popup_images" && p.media_type !== "popup_video",
     );
   }, [sortedPosts]);
-
-  const socket: Socket = useMemo(
-    () => io(socketUrl, { transports: ["websocket"] }),
-    [socketUrl],
-  );
-
-  useEffect(() => {
-    (async () => {
-      const res = await fetch(`${apiBase}/posts`, { cache: "no-store" });
-      const data = await res.json();
-      setPosts(data);
-    })();
-  }, [apiBase]);
 
   const popupPost = useMemo<PopupPost | null>(() => {
     const candidates = posts.filter(
@@ -287,43 +331,9 @@ export default function HomePage() {
     return sorted[0] || null;
   }, [posts]);
 
-  useEffect(() => {
-    socket.on("post:upsert", (post: PostItem) => {
-      setPosts((prev) => {
-        const idx = prev.findIndex((p) => p.id === post.id);
-        if (idx === -1) return [post, ...prev];
-        const copy = [...prev];
-        copy[idx] = post;
-        return copy;
-      });
-    });
-
-    socket.on("post:delete", ({ id }: { id: string }) => {
-      setPosts((prev) => prev.filter((p) => p.id !== id));
-    });
-
-    return () => {
-      socket.off("post:upsert");
-      socket.off("post:delete");
-      socket.disconnect();
-    };
-  }, [socket]);
-
   return (
     <main className="space-y-6">
       <PopupOverlay post={popupPost} />
-
-      {/* <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Masjid Al-Ukhuwah
-          </h1>
-          <p className="text-sm text-zinc-500">
-            Pesona Bali City View Residence Blok B.18 Jl. Waruga Jaya No. 108,
-            Ciwaruga, Kec. Parongpong, Kab. Bandung Barat, Jawa Barat - 40559
-          </p>
-        </div>
-      </header> */}
 
       <div className="grid gap-4 md:grid-cols-2">
         {frontpagePosts.map((p) => {
@@ -361,7 +371,6 @@ export default function HomePage() {
 
           const scheduleSectionTitle =
             getVal(p.fields, "schedule_section_title") || "Schedule";
-
           const scheduleSectionCaption =
             getVal(p.fields, "schedule_section_caption") || "";
 
@@ -410,7 +419,6 @@ export default function HomePage() {
                     </div>
                   ) : null}
 
-                  {/* Schedule (only if exists) */}
                   {hasSchedule ? (
                     <ScheduleTable
                       rows={scheduleRows}
@@ -419,7 +427,6 @@ export default function HomePage() {
                     />
                   ) : null}
 
-                  {/* Blocks */}
                   {blocks.length > 0 ? (
                     <div className="grid gap-2">
                       {blocks.map((b) => (
@@ -442,11 +449,6 @@ export default function HomePage() {
                       ))}
                     </div>
                   ) : null}
-                  {/* (
-                     <div className="text-sm text-zinc-500">
-                       Tidak ada title/description yang diisi.
-                     </div>
-                   )} */}
                 </div>
               </Card>
             </div>

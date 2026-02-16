@@ -1,182 +1,57 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { io, Socket } from "socket.io-client";
 import { Card } from "../../../components/Card";
 import { Spinner } from "../../../components/Spinner";
 import { formatIDR, parseIDR } from "../../../lib/idr";
 import { useRouter, useSearchParams } from "next/navigation";
 import { RichTextEditor } from "../../../components/RichTextEditor";
+import { TabButton } from "./_components/TabButton";
+import { DonationBlock } from "./_components/DonationBlock";
+import {
+  ScheduleEditor,
+  ScheduleMetaEditor,
+} from "./_components/ScheduleEditor";
+import {
+  SCHEDULE_KEY,
+  SCHEDULE_TITLE_KEY,
+  SCHEDULE_CAPTION_KEY,
+  parseScheduleFromFields,
+  getScheduleCountFromFields,
+  toScheduleJson,
+  type ScheduleRow,
+} from "./_lib/schedule";
 
-type MediaType = "images" | "video" | "popup_images" | "popup_video";
+import {
+  cleanStr,
+  makeEmptyFields,
+  getOrderValue,
+  computeMaxFilledBlock,
+} from "./_lib/helpers";
+
+import {
+  fetchPosts,
+  createPost,
+  updatePost,
+  deletePost,
+  patchPostFields,
+  uploadMedia,
+  type PostItem,
+  type MediaType,
+} from "./_lib/postsApi";
+
+import { NoticeToast } from "./_components/NoticeToast";
+import { useNotice, type Phase } from "./_lib/useNotice";
+
+import { PostBlocksEditor } from "./_components/PostBlocksEditor";
+import { PostMediaEditor } from "./_components/PostMediaEditor";
+import { PostLayoutEditor } from "./_components/PostLayoutEditor";
+
+import { useSocket } from "./_lib/socket";
 
 // untuk tab di edit drawer
 type PostsTab = "content" | "media" | "donation" | "layout" | "schedule";
 type EditTab = "content" | "media" | "donation" | "layout" | "schedule";
-
-type PostItem = {
-  id: string;
-  fields?: Record<string, string>;
-  media_type?: MediaType | null;
-  media_urls?: string[] | null;
-  media_paths?: string[] | null;
-  created_at: string;
-  updated_at: string;
-};
-
-type Phase =
-  | "idle"
-  | "loading_list"
-  | "uploading_create"
-  | "creating"
-  | "uploading_update"
-  | "updating"
-  | "deleting"
-  | "reordering";
-
-function cleanStr(v: unknown) {
-  return String(v ?? "").trim();
-}
-
-function makeEmptyFields() {
-  const init: Record<string, string> = {};
-  for (let i = 1; i <= 10; i++) {
-    init[`title_${i}`] = "";
-    init[`description_${i}`] = "";
-  }
-  return init;
-}
-
-async function safeJson(res: Response) {
-  const text = await res.text();
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text;
-  }
-}
-
-function DonationBlock({
-  label,
-  prefix,
-  fields,
-  setFields,
-  disabled,
-}: {
-  label: string;
-  prefix: "infak" | "wakaf" | "zakat";
-  fields: Record<string, string>;
-  setFields: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-  disabled: boolean;
-}) {
-  const titleKey = `${prefix}_title`;
-  const amountKey = `${prefix}_amount`;
-  const targetEnabledKey = `${prefix}_target_enabled`;
-  const targetKey = `${prefix}_target_amount`;
-
-  const title = fields[titleKey] || "";
-  const amount = Number(fields[amountKey] || 0);
-  const targetEnabled = fields[targetEnabledKey] === "true";
-  const target = Number(fields[targetKey] || 0);
-
-  const progress =
-    targetEnabled && target > 0
-      ? Math.min(100, Math.round((amount / target) * 100))
-      : 0;
-
-  return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-      <div className="text-sm font-semibold text-zinc-900">{label}</div>
-
-      <label className="mt-3 block text-sm font-medium text-zinc-800">
-        Title
-      </label>
-      <input
-        value={title}
-        disabled={disabled}
-        onChange={(e) =>
-          setFields((prev) => ({ ...prev, [titleKey]: e.target.value }))
-        }
-        className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-400 disabled:opacity-60"
-        placeholder={`Judul ${label}`}
-      />
-
-      <label className="mt-3 block text-sm font-medium text-zinc-800">
-        Nominal Terkumpul (Rp)
-      </label>
-      <input
-        value={formatIDR(amount)}
-        disabled={disabled}
-        inputMode="numeric"
-        onChange={(e) =>
-          setFields((prev) => ({
-            ...prev,
-            [amountKey]: String(parseIDR(e.target.value)),
-          }))
-        }
-        className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-400 disabled:opacity-60"
-        placeholder="Rp 0"
-      />
-
-      <div className="mt-3 flex items-center gap-2">
-        <input
-          id={`${prefix}-target`}
-          type="checkbox"
-          checked={targetEnabled}
-          disabled={disabled}
-          onChange={(e) =>
-            setFields((prev) => ({
-              ...prev,
-              [targetEnabledKey]: String(e.target.checked),
-              // kalau dimatikan, target tetap disimpan (tidak dihapus) biar fleksibel
-            }))
-          }
-          className="h-4 w-4 rounded border-zinc-300"
-        />
-        <label htmlFor={`${prefix}-target`} className="text-sm text-zinc-700">
-          Enable Target Nominal
-        </label>
-      </div>
-
-      {targetEnabled ? (
-        <>
-          <label className="mt-3 block text-sm font-medium text-zinc-800">
-            Target Nominal (Rp)
-          </label>
-          <input
-            value={formatIDR(target)}
-            disabled={disabled}
-            inputMode="numeric"
-            onChange={(e) =>
-              setFields((prev) => ({
-                ...prev,
-                [targetKey]: String(parseIDR(e.target.value)),
-              }))
-            }
-            className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-400 disabled:opacity-60"
-            placeholder="Rp 0"
-          />
-
-          <div className="mt-3">
-            <div className="flex items-center justify-between text-xs text-zinc-500">
-              <span>Progress</span>
-              <span>{progress}%</span>
-            </div>
-            <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-zinc-100">
-              <div
-                className="h-full rounded-full bg-zinc-900"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-            <div className="mt-2 text-xs text-zinc-500">
-              {formatIDR(amount)} / {formatIDR(target)}
-            </div>
-          </div>
-        </>
-      ) : null}
-    </div>
-  );
-}
 
 function AccordionSection({
   title,
@@ -221,292 +96,27 @@ function AccordionSection({
   );
 }
 
-const SCHEDULE_KEY = "schedule_json";
-const SCHEDULE_TITLE_KEY = "schedule_section_title";
-const SCHEDULE_CAPTION_KEY = "schedule_section_caption";
-
-function getScheduleCount(fields?: Record<string, string>) {
-  const raw = (fields?.[SCHEDULE_KEY] || "").trim();
-  if (!raw) return 0;
-
-  try {
-    const arr = JSON.parse(raw);
-    if (!Array.isArray(arr)) return 0;
-
-    // minimal valid row: ada salah satu field
-    const rows = arr
-      .map((x) => ({
-        dayName: String(x?.dayName ?? "").trim(),
-        hijriahDay: Number(x?.hijriahDay ?? x?.hijirahDay ?? 0),
-        dateM: String(x?.dateM ?? "").trim(),
-        imamName: String(x?.imamName ?? "").trim(),
-      }))
-      .filter((r) => r.dayName || r.imamName || r.dateM || r.hijriahDay);
-
-    return rows.length;
-  } catch {
-    return 0;
-  }
-}
-
-type ScheduleRow = {
-  dayName: string; // "Rabu"
-  hijriahDay: number; // 1..30
-  dateM: string; // "2026-02-18" (ISO date)
-  imamName: string; // "Ust. ..."
-};
-
-function parseSchedule(fields?: Record<string, string>): ScheduleRow[] {
-  const raw = (fields?.[SCHEDULE_KEY] || "").trim();
-  if (!raw) return [];
-
-  try {
-    const arr = JSON.parse(raw);
-    if (!Array.isArray(arr)) return [];
-
-    return arr
-      .map((x) => ({
-        dayName: String(x?.dayName ?? "").trim(),
-        hijriahDay: Number(x?.hijriahDay ?? 0),
-        dateM: String(x?.dateM ?? "").trim(),
-        imamName: String(x?.imamName ?? "").trim(),
-      }))
-      .filter((r) => r.dayName || r.imamName || r.dateM || r.hijriahDay);
-  } catch {
-    return [];
-  }
-}
-
-function ScheduleMetaEditor({
-  fields,
-  setFields,
-  disabled,
-}: {
-  fields: Record<string, string>;
-  setFields: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-  disabled: boolean;
-}) {
-  return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-      <div className="text-sm font-semibold text-zinc-900">
-        Schedule Section
-      </div>
-      <div className="mt-1 text-xs text-zinc-500">
-        Judul & caption untuk tampilan di frontpage.
-      </div>
-
-      <label className="mt-4 block text-sm font-medium text-zinc-800">
-        Section Title
-      </label>
-      <input
-        disabled={disabled}
-        value={fields[SCHEDULE_TITLE_KEY] || ""}
-        onChange={(e) =>
-          setFields((prev) => ({
-            ...prev,
-            [SCHEDULE_TITLE_KEY]: e.target.value,
-          }))
-        }
-        className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-400 disabled:opacity-60"
-        placeholder="Schedule"
-      />
-
-      <label className="mt-3 block text-sm font-medium text-zinc-800">
-        Section Caption
-      </label>
-      <input
-        disabled={disabled}
-        value={fields[SCHEDULE_CAPTION_KEY] || ""}
-        onChange={(e) =>
-          setFields((prev) => ({
-            ...prev,
-            [SCHEDULE_CAPTION_KEY]: e.target.value,
-          }))
-        }
-        className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-400 disabled:opacity-60"
-        placeholder="Contoh: Jadwal imam minggu ini"
-      />
-    </div>
-  );
-}
-
-function ScheduleEditor({
-  value,
-  onChange,
-  disabled,
-}: {
-  value: ScheduleRow[];
-  onChange: (next: ScheduleRow[]) => void;
-  disabled: boolean;
-}) {
-  function updateRow(i: number, patch: Partial<ScheduleRow>) {
-    onChange(value.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
-  }
-
-  function addRow() {
-    onChange([
-      ...value,
-      { dayName: "", hijriahDay: 1, dateM: "", imamName: "" },
-    ]);
-  }
-
-  function removeRow(i: number) {
-    onChange(value.filter((_, idx) => idx !== i));
-  }
-
-  function sortRows() {
-    const sorted = [...value].sort((a, b) => {
-      // prefer hijriahDay kalau valid
-      const ra = Number(a.hijriahDay || 0);
-      const rb = Number(b.hijriahDay || 0);
-      if (ra && rb && ra !== rb) return ra - rb;
-
-      // fallback ke dateM
-      if (a.dateM && b.dateM) return a.dateM.localeCompare(b.dateM);
-      if (a.dateM) return -1;
-      if (b.dateM) return 1;
-
-      return 0;
-    });
-    onChange(sorted);
-  }
-
-  return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="text-sm font-semibold text-zinc-900">Jadwal</div>
-          <div className="mt-1 text-xs text-zinc-500">
-            Disimpan sebagai JSON di{" "}
-            <span className="font-mono">{SCHEDULE_KEY}</span>.
-          </div>
-        </div>
-
-        <div className="flex gap-2">
-          <button
-            type="button"
-            disabled={disabled || value.length <= 1}
-            onClick={sortRows}
-            className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-60"
-          >
-            Sort
-          </button>
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={addRow}
-            className="rounded-xl bg-zinc-900 px-3 py-2 text-xs font-medium text-white hover:bg-zinc-800 disabled:opacity-60"
-          >
-            + Tambah Baris
-          </button>
-        </div>
-      </div>
-
-      <div className="mt-4 overflow-x-auto">
-        <table className="min-w-[820px] w-full border-collapse">
-          <thead className="bg-zinc-50 text-xs text-zinc-600">
-            <tr>
-              <th className="p-2 text-left">Hari</th>
-              <th className="p-2 text-left">hijriah (1447H)</th>
-              <th className="p-2 text-left">Tanggal (2026M)</th>
-              <th className="p-2 text-left">Imam</th>
-              <th className="p-2"></th>
-            </tr>
-          </thead>
-
-          <tbody className="divide-y divide-zinc-200 text-sm">
-            {value.length === 0 ? (
-              <tr>
-                <td className="p-3 text-zinc-500" colSpan={5}>
-                  Belum ada jadwal.
-                </td>
-              </tr>
-            ) : (
-              value.map((row, i) => (
-                <tr key={i}>
-                  <td className="p-2">
-                    <input
-                      disabled={disabled}
-                      value={row.dayName}
-                      onChange={(e) =>
-                        updateRow(i, { dayName: e.target.value })
-                      }
-                      className="w-full rounded-xl border border-zinc-200 px-3 py-2 outline-none focus:border-zinc-400 disabled:opacity-60"
-                      placeholder="Rabu"
-                    />
-                  </td>
-
-                  <td className="p-2">
-                    <input
-                      disabled={disabled}
-                      type="number"
-                      min={1}
-                      value={row.hijriahDay ?? 1}
-                      onChange={(e) =>
-                        updateRow(i, { hijriahDay: Number(e.target.value) })
-                      }
-                      className="w-full rounded-xl border border-zinc-200 px-3 py-2 outline-none focus:border-zinc-400 disabled:opacity-60"
-                      placeholder="1"
-                    />
-                  </td>
-
-                  <td className="p-2">
-                    <input
-                      disabled={disabled}
-                      type="date"
-                      value={row.dateM}
-                      onChange={(e) => updateRow(i, { dateM: e.target.value })}
-                      className="w-full rounded-xl border border-zinc-200 px-3 py-2 outline-none focus:border-zinc-400 disabled:opacity-60"
-                    />
-                  </td>
-
-                  <td className="p-2">
-                    <input
-                      disabled={disabled}
-                      value={row.imamName}
-                      onChange={(e) =>
-                        updateRow(i, { imamName: e.target.value })
-                      }
-                      className="w-full rounded-xl border border-zinc-200 px-3 py-2 outline-none focus:border-zinc-400 disabled:opacity-60"
-                      placeholder="Ust. ..."
-                    />
-                  </td>
-
-                  <td className="p-2 text-right">
-                    <button
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => removeRow(i)}
-                      className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-60"
-                    >
-                      Hapus
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
 export default function AdminPage() {
   const apiBase = process.env.NEXT_PUBLIC_API_BASE!;
-  const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL!;
 
   // realtime socket (opsional untuk update list CMS juga)
-  const socket: Socket = useMemo(
-    () => io(socketUrl, { transports: ["websocket"] }),
-    [socketUrl],
-  );
+  const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL;
+  const socket = useSocket(socketUrl);
 
   const [phase, setPhase] = useState<Phase>("idle");
-  const [statusText, setStatusText] = useState("");
-  const [errorText, setErrorText] = useState("");
 
-  const isBusy = phase !== "idle";
+  const {
+    showNotice,
+    statusText,
+    errorText,
+    isBusy,
+    busyLabel,
+    pushStatus,
+    pushError,
+    closeNotice,
+    clearNotice,
+  } = useNotice(phase);
+
   const isLoadingList = phase === "loading_list";
 
   // list
@@ -536,20 +146,6 @@ export default function AdminPage() {
   const [createSchedule, setCreateSchedule] = useState<ScheduleRow[]>([]);
   const [editSchedule, setEditSchedule] = useState<ScheduleRow[]>([]);
 
-  const [showNotice, setShowNotice] = useState(false);
-
-  function pushStatus(msg: string) {
-    setErrorText("");
-    setStatusText(msg);
-    setShowNotice(true);
-  }
-
-  function pushError(msg: string) {
-    setStatusText("");
-    setErrorText(msg);
-    setShowNotice(true);
-  }
-
   useEffect(() => {
     if (editing) setEditTab("content");
   }, [editing]);
@@ -564,19 +160,27 @@ export default function AdminPage() {
   }
 
   async function refreshList() {
-    pushStatus("Loading posts...");
     setPhase("loading_list");
+    pushStatus("Loading posts...");
     try {
-      const res = await fetch(`${apiBase}/posts`, { cache: "no-store" });
-      if (!res.ok) throw new Error("Failed to fetch posts");
-      const data = await res.json();
+      const data = await fetchPosts(apiBase);
       setPosts(data);
-      setStatusText("");
+      clearNotice();
     } catch (e: any) {
       pushError(e?.message || "Failed to load posts");
     } finally {
       setPhase("idle");
     }
+  }
+
+  async function patchOrder(post: PostItem, newOrder: number) {
+    const nextFields = {
+      ...(post.fields || {}),
+      display_order: String(newOrder),
+    };
+
+    // akan trigger realtime via server (kalau backend emit)
+    await patchPostFields(apiBase, post.id, nextFields);
   }
 
   // initial load
@@ -587,7 +191,9 @@ export default function AdminPage() {
 
   // keep CMS list in sync via socket (nice to have)
   useEffect(() => {
-    socket.on("post:upsert", (post: PostItem) => {
+    if (!socket) return;
+
+    const onUpsert = (post: PostItem) => {
       setPosts((prev) => {
         const idx = prev.findIndex((p) => p.id === post.id);
         if (idx === -1) return [post, ...prev];
@@ -595,39 +201,48 @@ export default function AdminPage() {
         copy[idx] = post;
         return copy;
       });
-    });
+    };
 
-    socket.on("post:delete", ({ id }: { id: string }) => {
+    const onDelete = ({ id }: { id: string }) => {
       setPosts((prev) => prev.filter((p) => p.id !== id));
-      // kalau yang sedang diedit dihapus, tutup drawer
       setEditing((curr) => (curr?.id === id ? null : curr));
-    });
+    };
+
+    socket.on("post:upsert", onUpsert);
+    socket.on("post:delete", onDelete);
 
     return () => {
-      socket.off("post:upsert");
-      socket.off("post:delete");
-      socket.disconnect();
+      socket.off("post:upsert", onUpsert);
+      socket.off("post:delete", onDelete);
     };
   }, [socket]);
 
-  function computeMaxFilledBlock(fields?: Record<string, string>) {
-    let max = 1;
-    for (let i = 1; i <= 10; i++) {
-      const t = (fields?.[`title_${i}`] || "").trim();
-      const d = (fields?.[`description_${i}`] || "").trim();
-      if (t || d) max = i;
-    }
-    return max;
-  }
+  useEffect(() => {
+    if (!socket) return;
+
+    const onConnect = () => console.log("[socket] connected", socket.id);
+    const onDisconnect = (r: any) => console.log("[socket] disconnected", r);
+    const onError = (e: any) =>
+      console.log("[socket] connect_error", e?.message || e);
+
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    socket.on("connect_error", onError);
+
+    return () => {
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+      socket.off("connect_error", onError);
+    };
+  }, [socket]);
 
   // open edit drawer
   function openEdit(p: PostItem) {
-    setErrorText("");
-    setStatusText("");
+    clearNotice();
     setEditing(p);
     setEditFields({ ...makeEmptyFields(), ...(p.fields || {}) });
     setEditVisibleBlocks(computeMaxFilledBlock(p.fields));
-    setEditSchedule(parseSchedule(p.fields));
+    setEditSchedule(parseScheduleFromFields(p.fields));
     setEditTab("content");
 
     const mt = (p.media_type as MediaType | null) || "images";
@@ -642,72 +257,14 @@ export default function AdminPage() {
     setEditing(null);
     setEditImages(null);
     setEditVideo(null);
-    setStatusText("");
-    setErrorText("");
+    clearNotice();
     setEditSchedule([]);
-  }
-
-  async function uploadMedia(
-    kind: MediaType,
-    images: FileList | null,
-    video: File | null,
-  ) {
-    const isImages = kind === "images" || kind === "popup_images";
-    const isVideo = kind === "video" || kind === "popup_video";
-
-    // return { mediaType|null, mediaUrls, mediaPaths }
-    if (isImages && images?.length) {
-      const fd = new FormData();
-      Array.from(images).forEach((f) => fd.append("files", f));
-      const res = await fetch(`${apiBase}/upload/images`, {
-        method: "POST",
-        body: fd,
-      });
-      if (!res.ok) {
-        const err = await safeJson(res);
-        throw new Error(
-          typeof err === "string"
-            ? err
-            : err?.message || "Upload images failed",
-        );
-      }
-      const uploadRes = await safeJson(res);
-      return {
-        mediaType: kind as "images" | "popup_images",
-        mediaUrls: uploadRes.mediaUrls ?? [],
-        mediaPaths: uploadRes.mediaPaths ?? [],
-      };
-    }
-
-    if (isVideo && video) {
-      const fd = new FormData();
-      fd.append("file", video);
-      const res = await fetch(`${apiBase}/upload/video`, {
-        method: "POST",
-        body: fd,
-      });
-      if (!res.ok) {
-        const err = await safeJson(res);
-        throw new Error(
-          typeof err === "string" ? err : err?.message || "Upload video failed",
-        );
-      }
-      const uploadRes = await safeJson(res);
-      return {
-        mediaType: kind as "video" | "popup_video",
-        mediaUrls: uploadRes.mediaUrls ?? [],
-        mediaPaths: uploadRes.mediaPaths ?? [],
-      };
-    }
-
-    return { mediaType: null, mediaUrls: [], mediaPaths: [] };
   }
 
   async function handleCreate() {
     if (isBusy) return;
 
-    setErrorText("");
-    setStatusText("");
+    clearNotice();
 
     const isImages =
       createMediaType === "images" || createMediaType === "popup_images";
@@ -738,6 +295,7 @@ export default function AdminPage() {
         pushStatus("Uploading file...");
 
         const up = await uploadMedia(
+          apiBase,
           createMediaType,
           createImages,
           createVideo,
@@ -748,30 +306,17 @@ export default function AdminPage() {
       }
 
       setPhase("creating");
-      setStatusText("Creating post & pushing realtime...");
+      pushStatus("Creating post & pushing realtime...");
 
       const payloadFields = { ...createFields };
-      payloadFields[SCHEDULE_KEY] = createSchedule.length
-        ? JSON.stringify(createSchedule)
-        : "";
+      payloadFields[SCHEDULE_KEY] = toScheduleJson(createSchedule);
 
-      const res = await fetch(`${apiBase}/posts`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fields: payloadFields,
-          mediaType,
-          mediaUrls,
-          mediaPaths,
-        }),
+      await createPost(apiBase, {
+        fields: payloadFields,
+        mediaType,
+        mediaUrls,
+        mediaPaths,
       });
-
-      if (!res.ok) {
-        const err = await safeJson(res);
-        throw new Error(
-          typeof err === "string" ? err : err?.message || "Create failed",
-        );
-      }
 
       pushStatus("Done.");
       setCreateFields(makeEmptyFields());
@@ -780,7 +325,7 @@ export default function AdminPage() {
       setCreateVisibleBlocks(1);
       setCreateSchedule([]);
 
-      setTimeout(() => setStatusText(""), 700);
+      setTimeout(() => clearNotice(), 700);
     } catch (e: any) {
       pushError(e?.message || "Create error");
     } finally {
@@ -790,9 +335,7 @@ export default function AdminPage() {
 
   async function handleUpdate() {
     if (!editing || isBusy) return;
-
-    setErrorText("");
-    setStatusText("");
+    clearNotice();
 
     const isEditImages =
       editMediaType === "images" || editMediaType === "popup_images";
@@ -816,44 +359,34 @@ export default function AdminPage() {
       const payload: any = { fields: { ...editFields } };
 
       // ✅ inject schedule sekali, tidak ketimpa
-      payload.fields[SCHEDULE_KEY] = editSchedule.length
-        ? JSON.stringify(editSchedule)
-        : "";
+      payload.fields[SCHEDULE_KEY] = toScheduleJson(editSchedule);
 
       if (replaceMedia) {
         setPhase("uploading_update");
-        setStatusText("Uploading replacement media...");
+        pushStatus("Uploading replacement media...");
 
-        const up = await uploadMedia(editMediaType, editImages, editVideo);
+        const up = await uploadMedia(
+          apiBase,
+          editMediaType,
+          editImages,
+          editVideo,
+        );
         payload.mediaType = up.mediaType;
         payload.mediaUrls = up.mediaUrls;
         payload.mediaPaths = up.mediaPaths;
       }
 
       setPhase("updating");
-      setStatusText("Updating & pushing realtime...");
+      pushStatus("Updating & pushing realtime...");
 
-      const res = await fetch(`${apiBase}/posts/${editing.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const err = await safeJson(res);
-        throw new Error(
-          typeof err === "string" ? err : err?.message || "Update failed",
-        );
-      }
-
-      const updated = await safeJson(res);
+      const updated = await updatePost(apiBase, editing.id, payload);
       setEditing(updated);
 
       setEditImages(null);
       setEditVideo(null);
 
-      setStatusText("Updated.");
-      setTimeout(() => setStatusText(""), 700);
+      pushStatus("Updated.");
+      setTimeout(() => clearNotice(), 700);
     } catch (e: any) {
       pushError(e?.message || "Update error");
     } finally {
@@ -873,13 +406,7 @@ export default function AdminPage() {
     setPhase("deleting");
 
     try {
-      const res = await fetch(`${apiBase}/posts/${id}`, { method: "DELETE" });
-      if (!res.ok) {
-        const err = await safeJson(res);
-        throw new Error(
-          typeof err === "string" ? err : err?.message || "Delete failed",
-        );
-      }
+      await deletePost(apiBase, id);
       pushStatus("Deleted.");
     } catch (e: any) {
       pushError(e?.message || "Delete error");
@@ -909,7 +436,7 @@ export default function AdminPage() {
     if (t === "popup_images") return "Popup Slider";
     if (t === "popup_video") return "Popup Video";
 
-    const scheduleCount = getScheduleCount(p.fields || {});
+    const scheduleCount = getScheduleCountFromFields(p.fields || {});
     const hasAnyText = Object.keys(p.fields || {}).some((k) => {
       const v = cleanStr((p.fields || {})[k]);
       return (k.startsWith("title_") || k.startsWith("description_")) && v;
@@ -955,7 +482,7 @@ export default function AdminPage() {
       ? p.media_urls.filter(Boolean).length
       : 0;
 
-    const scheduleCount = getScheduleCount(f);
+    const scheduleCount = getScheduleCountFromFields(f);
 
     const chips: { label: string; tone?: "neutral" | "good" | "info" }[] = [];
 
@@ -1047,50 +574,6 @@ export default function AdminPage() {
     router.replace(url.pathname + "?" + url.searchParams.toString());
   }
 
-  function TabButton({
-    active,
-    onClick,
-    title,
-    desc,
-  }: {
-    active: boolean;
-    onClick: () => void;
-    title: string;
-    desc?: string;
-  }) {
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        className={[
-          "flex-1 rounded-2xl border px-4 py-3 text-left transition",
-          active
-            ? "border-zinc-900 bg-zinc-900 text-white"
-            : "border-zinc-200 bg-white text-zinc-900 hover:bg-zinc-50",
-        ].join(" ")}
-      >
-        <div className="text-sm font-semibold">{title}</div>
-        {desc ? (
-          <div
-            className={[
-              "mt-0.5 text-xs",
-              active ? "text-white/80" : "text-zinc-500",
-            ].join(" ")}
-          >
-            {desc}
-          </div>
-        ) : null}
-      </button>
-    );
-  }
-
-  function getOrderValue(fields?: Record<string, string>) {
-    const raw = fields?.["display_order"];
-    const n = raw !== undefined ? Number(raw) : NaN;
-    // kosong/invalid => taruh paling bawah
-    return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
-  }
-
   const sortedPosts = useMemo(() => {
     return [...posts].sort((a, b) => {
       const oa = getOrderValue(a.fields);
@@ -1102,28 +585,6 @@ export default function AdminPage() {
       );
     });
   }, [posts]);
-
-  async function patchOrder(post: PostItem, newOrder: number) {
-    const nextFields = {
-      ...(post.fields || {}),
-      display_order: String(newOrder),
-    };
-
-    const res = await fetch(`${apiBase}/posts/${post.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fields: nextFields }),
-    });
-
-    if (!res.ok) {
-      const err = await safeJson(res);
-      throw new Error(
-        typeof err === "string" ? err : err?.message || "Update order failed",
-      );
-    }
-
-    return await safeJson(res);
-  }
 
   async function movePost(postId: string, direction: "up" | "down") {
     if (isBusy) return;
@@ -1175,7 +636,7 @@ export default function AdminPage() {
       await patchOrder(a, fixedOrderB);
       await patchOrder(b, fixedOrderA);
 
-      setStatusText("");
+      clearNotice();
     } catch (e: any) {
       // kalau gagal, reload list biar konsisten
       pushError(e?.message || "Reorder error");
@@ -1184,14 +645,6 @@ export default function AdminPage() {
       setPhase("idle");
     }
   }
-
-  useEffect(() => {
-    if (!showNotice) return;
-    if (!statusText) return; // hanya auto-hide untuk status sukses/progress
-
-    const t = setTimeout(() => setShowNotice(false), 3000);
-    return () => clearTimeout(t);
-  }, [showNotice, statusText]);
 
   const isCreateImages =
     createMediaType === "images" || createMediaType === "popup_images";
@@ -1202,23 +655,6 @@ export default function AdminPage() {
     editMediaType === "images" || editMediaType === "popup_images";
   const isEditVideo =
     editMediaType === "video" || editMediaType === "popup_video";
-
-  const busyLabel =
-    phase === "loading_list"
-      ? "Loading..."
-      : phase === "uploading_create"
-        ? "Uploading..."
-        : phase === "creating"
-          ? "Creating..."
-          : phase === "uploading_update"
-            ? "Uploading..."
-            : phase === "updating"
-              ? "Updating..."
-              : phase === "deleting"
-                ? "Deleting..."
-                : phase === "reordering"
-                  ? "Reordering..."
-                  : "";
 
   return (
     <main className="space-y-6">
@@ -1247,46 +683,14 @@ export default function AdminPage() {
         </div>
       </header>
 
-      {showNotice && (statusText || errorText) ? (
-        <div className="fixed bottom-4 right-4 z-[9999] w-[min(420px,calc(100vw-2rem))]">
-          <div
-            className={[
-              "rounded-2xl border p-4 shadow-lg backdrop-blur bg-white/95",
-              errorText ? "border-rose-200" : "border-zinc-200",
-            ].join(" ")}
-            role="status"
-            aria-live="polite"
-          >
-            <div className="flex items-start gap-3">
-              {isBusy ? <Spinner className="mt-0.5" /> : null}
-
-              <div className="min-w-0 flex-1 space-y-1">
-                {errorText ? (
-                  <div className="text-sm font-semibold text-rose-800">
-                    {errorText}
-                  </div>
-                ) : null}
-
-                {statusText ? (
-                  <div className="text-sm text-zinc-800">
-                    {statusText} {busyLabel ? `(${busyLabel})` : ""}
-                  </div>
-                ) : null}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setShowNotice(false);
-                }}
-                className="shrink-0 rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-900 hover:bg-zinc-50"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <NoticeToast
+        open={showNotice}
+        statusText={statusText}
+        errorText={errorText}
+        isBusy={isBusy}
+        busyLabel={busyLabel}
+        onClose={closeNotice}
+      />
 
       {/* CREATE */}
       <Card>
@@ -1338,84 +742,13 @@ export default function AdminPage() {
         {/* Tab panels */}
         <div className="mt-4">
           {tab === "content" ? (
-            <div className="grid gap-3">
-              <div className="grid gap-3 md:grid-cols-2">
-                {fieldPairs.slice(0, createVisibleBlocks).map((n) => (
-                  <div
-                    key={n}
-                    className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4"
-                  >
-                    <div className="text-xs font-medium text-zinc-500">
-                      Block {n}
-                    </div>
-
-                    <label className="mt-3 block text-sm font-medium text-zinc-800">
-                      Title {n}
-                    </label>
-                    <input
-                      value={createFields[`title_${n}`] || ""}
-                      disabled={isBusy}
-                      onChange={(e) =>
-                        setCreateFields((prev) => ({
-                          ...prev,
-                          [`title_${n}`]: e.target.value,
-                        }))
-                      }
-                      className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-400 disabled:opacity-60"
-                    />
-
-                    <label className="mt-3 block text-sm font-medium text-zinc-800">
-                      Description {n}
-                    </label>
-                    <RichTextEditor
-                      value={createFields[`description_${n}`] || ""}
-                      disabled={isBusy}
-                      onChange={(html) =>
-                        setCreateFields((prev) => ({
-                          ...prev,
-                          [`description_${n}`]: html,
-                        }))
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={isBusy || createVisibleBlocks >= 10}
-                  onClick={() =>
-                    setCreateVisibleBlocks((v) => Math.min(10, v + 1))
-                  }
-                  className="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
-                >
-                  + Add Block
-                </button>
-
-                <button
-                  type="button"
-                  disabled={isBusy || createVisibleBlocks <= 1}
-                  onClick={() => {
-                    const next = Math.max(1, createVisibleBlocks - 1);
-                    const removedIndex = createVisibleBlocks;
-                    setCreateFields((prev) => ({
-                      ...prev,
-                      [`title_${removedIndex}`]: "",
-                      [`description_${removedIndex}`]: "",
-                    }));
-                    setCreateVisibleBlocks(next);
-                  }}
-                  className="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-50"
-                >
-                  Remove Last Block
-                </button>
-
-                <div className="self-center text-xs text-zinc-500">
-                  Showing {createVisibleBlocks}/10
-                </div>
-              </div>
-            </div>
+            <PostBlocksEditor
+              fields={createFields}
+              setFields={setCreateFields}
+              visibleBlocks={createVisibleBlocks}
+              setVisibleBlocks={setCreateVisibleBlocks}
+              disabled={isBusy}
+            />
           ) : null}
 
           {tab === "schedule" ? (
@@ -1434,74 +767,14 @@ export default function AdminPage() {
           ) : null}
 
           {tab === "media" ? (
-            <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-              <div className="text-sm font-semibold text-zinc-900">
-                Media (optional)
-              </div>
-              <div className="mt-1 text-xs text-zinc-500">
-                Images slider / Video autoplay / Pop-up images / Pop-up video.
-              </div>
-
-              <div className="mt-4 grid gap-3">
-                <div className="grid gap-2">
-                  <label className="text-sm font-medium text-zinc-800">
-                    Media Type
-                  </label>
-                  <select
-                    value={createMediaType}
-                    onChange={(e) =>
-                      setCreateMediaType(e.target.value as MediaType)
-                    }
-                    disabled={isBusy}
-                    className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-400 disabled:opacity-60"
-                  >
-                    <option value="images">Images (Slider)</option>
-                    <option value="video">Video (Autoplay)</option>
-                    <option value="popup_images">
-                      Pop-up Images (Fullscreen Slider)
-                    </option>
-                    <option value="popup_video">
-                      Pop-up Video (Fullscreen)
-                    </option>
-                  </select>
-                </div>
-
-                {isCreateImages ? (
-                  <div className="grid gap-2">
-                    <label className="text-sm font-medium text-zinc-800">
-                      Upload Images
-                    </label>
-                    <input
-                      type="file"
-                      accept="image/png,image/jpeg"
-                      multiple
-                      disabled={isBusy}
-                      onChange={(e) => {
-                        setCreateImages(e.target.files);
-                        setCreateVideo(null);
-                      }}
-                      className="text-sm text-zinc-700 disabled:opacity-60"
-                    />
-                  </div>
-                ) : isCreateVideo ? (
-                  <div className="grid gap-2">
-                    <label className="text-sm font-medium text-zinc-800">
-                      Upload Video (MP4)
-                    </label>
-                    <input
-                      type="file"
-                      accept="video/mp4"
-                      disabled={isBusy}
-                      onChange={(e) => {
-                        setCreateVideo(e.target.files?.[0] ?? null);
-                        setCreateImages(null);
-                      }}
-                      className="text-sm text-zinc-700 disabled:opacity-60"
-                    />
-                  </div>
-                ) : null}
-              </div>
-            </div>
+            <PostMediaEditor
+              mode="create"
+              mediaType={createMediaType}
+              setMediaType={setCreateMediaType}
+              disabled={isBusy}
+              onPickImages={setCreateImages}
+              onPickVideo={setCreateVideo}
+            />
           ) : null}
 
           {tab === "donation" ? (
@@ -1531,54 +804,11 @@ export default function AdminPage() {
           ) : null}
 
           {tab === "layout" ? (
-            <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-              <div className="text-sm font-semibold text-zinc-900">Layout</div>
-              <div className="mt-1 text-xs text-zinc-500">
-                Pengaturan global untuk card ini.
-              </div>
-
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <div className="grid gap-2">
-                  <label className="text-sm font-medium text-zinc-800">
-                    Display Order
-                  </label>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    disabled={isBusy}
-                    value={createFields["display_order"] || ""}
-                    onChange={(e) =>
-                      setCreateFields((prev) => ({
-                        ...prev,
-                        display_order: e.target.value,
-                      }))
-                    }
-                    className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-400 disabled:opacity-60"
-                    placeholder="mis. 1000"
-                  />
-                  <div className="text-xs text-zinc-500">
-                    Semakin kecil semakin atas.
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-                  <label className="flex items-center gap-2 rounded-2xl bg-zinc-50 p-4 text-sm text-zinc-700">
-                    <input
-                      type="checkbox"
-                      checked={createFields["layout_full_span"] === "true"}
-                      onChange={(e) =>
-                        setCreateFields((prev) => ({
-                          ...prev,
-                          layout_full_span: String(e.target.checked),
-                        }))
-                      }
-                      className="h-4 w-4 rounded border-zinc-300"
-                    />
-                    Full width card (span 2 columns)
-                  </label>
-                </div>
-              </div>
-            </div>
+            <PostLayoutEditor
+              fields={createFields}
+              setFields={setCreateFields}
+              disabled={isBusy}
+            />
           ) : null}
         </div>
 
@@ -1778,84 +1008,13 @@ export default function AdminPage() {
             <div className="p-5">
               {/* CONTENT TAB */}
               {editTab === "content" ? (
-                <div className="grid gap-3">
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {fieldPairs.slice(0, editVisibleBlocks).map((n) => (
-                      <div
-                        key={n}
-                        className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4"
-                      >
-                        <div className="text-xs font-medium text-zinc-500">
-                          Block {n}
-                        </div>
-
-                        <label className="mt-3 block text-sm font-medium text-zinc-800">
-                          Title {n}
-                        </label>
-                        <input
-                          value={editFields[`title_${n}`] || ""}
-                          disabled={isBusy}
-                          onChange={(e) =>
-                            setEditFields((prev) => ({
-                              ...prev,
-                              [`title_${n}`]: e.target.value,
-                            }))
-                          }
-                          className="mt-1 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-400 disabled:opacity-60"
-                        />
-
-                        <label className="mt-3 block text-sm font-medium text-zinc-800">
-                          Description {n}
-                        </label>
-                        <RichTextEditor
-                          value={editFields[`description_${n}`] || ""}
-                          disabled={isBusy}
-                          onChange={(html) =>
-                            setEditFields((prev) => ({
-                              ...prev,
-                              [`description_${n}`]: html,
-                            }))
-                          }
-                        />
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      disabled={isBusy || editVisibleBlocks >= 10}
-                      onClick={() =>
-                        setEditVisibleBlocks((v) => Math.min(10, v + 1))
-                      }
-                      className="inline-flex items-center justify-center rounded-xl bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
-                    >
-                      + Add Block
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={isBusy || editVisibleBlocks <= 1}
-                      onClick={() => {
-                        const next = Math.max(1, editVisibleBlocks - 1);
-                        const removedIndex = editVisibleBlocks;
-                        setEditFields((prev) => ({
-                          ...prev,
-                          [`title_${removedIndex}`]: "",
-                          [`description_${removedIndex}`]: "",
-                        }));
-                        setEditVisibleBlocks(next);
-                      }}
-                      className="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-50"
-                    >
-                      Remove Last Block
-                    </button>
-
-                    <div className="self-center text-xs text-zinc-500">
-                      Showing {editVisibleBlocks}/10
-                    </div>
-                  </div>
-                </div>
+                <PostBlocksEditor
+                  fields={editFields}
+                  setFields={setEditFields}
+                  visibleBlocks={editVisibleBlocks}
+                  setVisibleBlocks={setEditVisibleBlocks}
+                  disabled={isBusy}
+                />
               ) : null}
 
               {editTab === "schedule" ? (
@@ -1875,84 +1034,15 @@ export default function AdminPage() {
 
               {/* MEDIA TAB */}
               {editTab === "media" ? (
-                <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-                  <div className="text-sm font-semibold text-zinc-900">
-                    Media
-                  </div>
-                  <div className="mt-1 text-xs text-zinc-500">
-                    Upload media baru kalau ingin mengganti yang lama.
-                  </div>
-
-                  <div className="mt-4 grid gap-3">
-                    <div className="grid gap-2">
-                      <label className="text-sm font-medium text-zinc-800">
-                        Media Type
-                      </label>
-                      <select
-                        value={editMediaType}
-                        onChange={(e) =>
-                          setEditMediaType(e.target.value as MediaType)
-                        }
-                        disabled={isBusy}
-                        className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-400 disabled:opacity-60"
-                      >
-                        <option value="images">Images (Slider)</option>
-                        <option value="video">Video (Autoplay)</option>
-                        <option value="popup_images">Pop-up Images</option>
-                        <option value="popup_video">Pop-up Video</option>
-                      </select>
-                    </div>
-
-                    {/* Existing media info */}
-                    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-                      <div className="text-sm font-medium text-zinc-800">
-                        Current Media
-                      </div>
-                      <div className="mt-1 text-xs text-zinc-500 break-all">
-                        {(editing.media_urls?.length ?? 0) > 0
-                          ? editing.media_urls?.join("\n")
-                          : "No media attached."}
-                      </div>
-                    </div>
-
-                    {isEditImages ? (
-                      <div className="grid gap-2">
-                        <label className="text-sm font-medium text-zinc-800">
-                          Upload Images (replace)
-                        </label>
-                        <input
-                          type="file"
-                          accept="image/png,image/jpeg"
-                          multiple
-                          disabled={isBusy}
-                          onChange={(e) => {
-                            setEditImages(e.target.files);
-                            setEditVideo(null);
-                          }}
-                          className="text-sm text-zinc-700 disabled:opacity-60"
-                        />
-                      </div>
-                    ) : null}
-
-                    {isEditVideo ? (
-                      <div className="grid gap-2">
-                        <label className="text-sm font-medium text-zinc-800">
-                          Upload Video (replace)
-                        </label>
-                        <input
-                          type="file"
-                          accept="video/mp4"
-                          disabled={isBusy}
-                          onChange={(e) => {
-                            setEditVideo(e.target.files?.[0] ?? null);
-                            setEditImages(null);
-                          }}
-                          className="text-sm text-zinc-700 disabled:opacity-60"
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
+                <PostMediaEditor
+                  mode="edit"
+                  mediaType={editMediaType}
+                  setMediaType={setEditMediaType}
+                  disabled={isBusy}
+                  existingMediaUrls={editing.media_urls}
+                  onPickImages={setEditImages}
+                  onPickVideo={setEditVideo}
+                />
               ) : null}
 
               {/* DONATION TAB */}
@@ -1984,51 +1074,11 @@ export default function AdminPage() {
 
               {/* LAYOUT TAB */}
               {editTab === "layout" ? (
-                <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-                  <div className="text-sm font-semibold text-zinc-900">
-                    Layout
-                  </div>
-
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <div className="grid gap-2">
-                      <label className="text-sm font-medium text-zinc-800">
-                        Display Order
-                      </label>
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        disabled={isBusy}
-                        value={editFields["display_order"] || ""}
-                        onChange={(e) =>
-                          setEditFields((prev) => ({
-                            ...prev,
-                            display_order: e.target.value,
-                          }))
-                        }
-                        className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-400 disabled:opacity-60"
-                      />
-                      <div className="text-xs text-zinc-500">
-                        Semakin kecil semakin atas.
-                      </div>
-                    </div>
-
-                    <label className="flex items-center gap-2 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700">
-                      <input
-                        type="checkbox"
-                        checked={editFields["layout_full_span"] === "true"}
-                        disabled={isBusy}
-                        onChange={(e) =>
-                          setEditFields((prev) => ({
-                            ...prev,
-                            layout_full_span: String(e.target.checked),
-                          }))
-                        }
-                        className="h-4 w-4 rounded border-zinc-300"
-                      />
-                      Full width card (span 2 columns)
-                    </label>
-                  </div>
-                </div>
+                <PostLayoutEditor
+                  fields={editFields}
+                  setFields={setEditFields}
+                  disabled={isBusy}
+                />
               ) : null}
             </div>
 
