@@ -49,8 +49,7 @@ import { PostLayoutEditor } from "./_components/PostLayoutEditor";
 
 import { useSocket } from "./_lib/socket";
 
-import { SettingsEditor } from "./_components/SettingsEditor";
-
+import { SettingsEditor } from "../settings/_components/SettingsEditor";
 
 // untuk tab di edit drawer
 type PostsTab = "content" | "media" | "donation" | "layout" | "schedule";
