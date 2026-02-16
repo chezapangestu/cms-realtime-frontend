@@ -32,7 +32,7 @@ export async function GET(request: Request) {
   };
 
   try {
-    const apiUrl = `https://api.aladhan.com/v1/ttimings/${formattedDate}?latitude=${latitude}&longitude=${longitude}&method=20&tune=${tuneString}&timezonestring=Asia/Jakarta`;
+    const apiUrl = `https://api.aladhan.com/v1/timings/${formattedDate}?latitude=${latitude}&longitude=${longitude}&method=20&tune=${tuneString}&timezonestring=Asia/Jakarta`;
 
     const response = await fetch(apiUrl, {
       headers: { Accept: "application/json" },

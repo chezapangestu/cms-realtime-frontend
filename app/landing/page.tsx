@@ -2,10 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DateTime } from "luxon";
-import { useSocket } from "../admin/(app)/posts/_lib/socket"; // sesuai struktur kamu
-import { fetchPosts, type PostItem } from "../admin/(app)/posts/_lib/postsApi"; // sesuai struktur kamu
-import { cleanStr } from "../admin/(app)/posts/_lib/helpers"; // sesuai struktur kamu
+import { useSocket } from "../admin/(app)/posts/_lib/socket";
+import { fetchPosts, type PostItem } from "../admin/(app)/posts/_lib/postsApi";
+import { cleanStr } from "../admin/(app)/posts/_lib/helpers";
 import { ImageSlider } from "../components/ImageSlider";
+import { VideoSlider } from "../components/VideoSlider";
+import Image from "next/image";
+import icon from "../../public/favicon.png";
 
 type PrayerTimes = {
   Fajr: string;
@@ -69,13 +72,27 @@ function getCurrentPrayerKey(
 function LogoCenter() {
   return (
     <div className="flex items-center justify-center">
-      <div className="h-10 w-10 rounded-2xl bg-white/15 border border-white/20" />
+      {" "}
+      <div className="h-10 w-10 rounded-2xl bg-white/15 border border-white/20">
+        {" "}
+        <Image
+          src={icon}
+          width={50}
+          height={50}
+          alt="Picture of the author"
+        />{" "}
+      </div>{" "}
       <div className="ml-3">
+        {" "}
         <div className="text-base font-semibold leading-tight">
-          Masjid Smart Display
-        </div>
-        <div className="text-xs text-white/80">Landing</div>
-      </div>
+          {" "}
+          Masjid Al Ukhuwah{" "}
+        </div>{" "}
+        <div className="text-xs text-white/80">
+          {" "}
+          Pesona Bali City VIew Residence{" "}
+        </div>{" "}
+      </div>{" "}
     </div>
   );
 }
@@ -155,14 +172,7 @@ function RunningText({ text }: { text: string }) {
   );
 }
 
-// ====== SETTINGS fetch + normalize (backend mengembalikan row {id, fields}) ======
-type SettingsRow = {
-  id: string;
-  fields: Record<string, any>;
-  created_at?: string | null;
-  updated_at?: string | null;
-};
-
+// ====== SETTINGS normalize (backend bisa kirim row {id, fields} atau flat object) ======
 function normalizeSettings(input: any) {
   const fields =
     input?.fields && typeof input.fields === "object" ? input.fields : input;
@@ -170,14 +180,18 @@ function normalizeSettings(input: any) {
   return {
     ticker_text:
       typeof fields?.ticker_text === "string" ? fields.ticker_text : "",
-    slide_duration_ms: Number(fields?.slide_duration_ms || 8000),
+    slide_duration_ms: Math.max(500, Number(fields?.slide_duration_ms || 8000)),
+    media_interval_ms: Math.max(
+      500,
+      Number(fields?.media_interval_ms || 15000),
+    ),
   };
 }
 
 async function fetchSettingsFromApi(apiBase: string) {
   const res = await fetch(`${apiBase}/settings?id=app`, { cache: "no-store" });
   if (!res.ok) throw new Error("Failed to load settings");
-  const json = (await res.json()) as SettingsRow;
+  const json = await res.json();
   return normalizeSettings(json);
 }
 
@@ -195,7 +209,7 @@ function getPostSlideTypes(p: PostItem): SlideType[] {
   });
   if (hasText) types.push("post");
 
-  // Schedule (berdasarkan key schedule_json / schedule count / meta)
+  // Schedule
   const hasSchedule =
     typeof f.schedule_json === "string" && cleanStr(f.schedule_json).length > 2;
   if (hasSchedule) types.push("schedule");
@@ -240,7 +254,15 @@ function slideLabel(type: SlideType) {
   return "Donation";
 }
 
-function SlideRenderer({ post, type }: { post: PostItem; type: SlideType }) {
+function SlideRenderer({
+  post,
+  type,
+  mediaIntervalMs,
+}: {
+  post: PostItem;
+  type: SlideType;
+  mediaIntervalMs: number;
+}) {
   const f = (post.fields || {}) as Record<string, any>;
 
   if (type === "post") {
@@ -291,18 +313,45 @@ function SlideRenderer({ post, type }: { post: PostItem; type: SlideType }) {
 
   if (type === "media") {
     const mt = String((post as any).media_type || "-");
-    const mediaCount = Array.isArray(post.media_urls)
-      ? post.media_urls.filter(Boolean).length
-      : 0;
+    const urls = Array.isArray(post.media_urls)
+      ? post.media_urls.filter(Boolean).map(String)
+      : [];
+
+    const isImages = mt === "images" || mt === "popup_images";
+    const isVideo = mt === "video" || mt === "popup_video";
 
     return (
       <div className="rounded-2xl border border-white/15 bg-white/5 p-4">
-        <div className="text-base font-semibold">Media</div>
-        <div className="mt-1 text-sm text-white/85">
-          Type: <span className="font-mono">{mt}</span> • Items: {mediaCount}
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-base font-semibold">Media</div>
+          <div className="text-xs text-white/70">
+            <span className="font-mono">{mt}</span> • {urls.length} item
+          </div>
         </div>
-        <div className="mt-3 text-xs text-white/70">
-          (Nanti bisa pakai ImageSlider / Video player sesuai kebutuhan)
+
+        <div className="mt-3">
+          {isImages ? (
+            <ImageSlider
+              urls={urls}
+              intervalMs={Math.max(500, Number(mediaIntervalMs || 15000))}
+              fadeMs={600}
+            />
+          ) : null}
+
+          {isVideo ? (
+            <VideoSlider
+              urls={urls}
+              intervalMs={Math.max(500, Number(mediaIntervalMs || 15000))}
+              fadeMs={600}
+              muted
+            />
+          ) : null}
+
+          {!isImages && !isVideo ? (
+            <div className="text-sm text-white/80">
+              Media type tidak dikenali.
+            </div>
+          ) : null}
         </div>
       </div>
     );
@@ -361,13 +410,14 @@ export default function LandingPage() {
   const [posts, setPosts] = useState<PostItem[]>([]);
   const [prayer, setPrayer] = useState<PrayerTimes | null>(null);
 
-  // settings (CMS)
+  // settings
   const [tickerText, setTickerText] = useState(
     "Selamat datang. Mohon matikan/heningkan ponsel. Jaga kebersihan dan ketertiban.",
   );
   const [slideDurationMs, setSlideDurationMs] = useState<number>(8000);
+  const [mediaIntervalMs, setMediaIntervalMs] = useState<number>(15000);
 
-  // slider
+  // slider (tipe slide)
   const [slideIdx, setSlideIdx] = useState(0);
   const timerRef = useRef<number | null>(null);
 
@@ -394,10 +444,14 @@ export default function LandingPage() {
     try {
       const s = await fetchSettingsFromApi(apiBase);
       setTickerText(s.ticker_text || "");
-      const n = Number(s.slide_duration_ms || 8000);
-      setSlideDurationMs(!Number.isNaN(n) ? Math.max(500, n) : 8000);
+
+      const sd = Number(s.slide_duration_ms || 8000);
+      setSlideDurationMs(!Number.isNaN(sd) ? Math.max(500, sd) : 8000);
+
+      const mi = Number(s.media_interval_ms || 15000);
+      setMediaIntervalMs(!Number.isNaN(mi) ? Math.max(500, mi) : 15000);
     } catch {
-      // fallback do nothing
+      // ignore
     }
   }
 
@@ -430,14 +484,15 @@ export default function LandingPage() {
       setPosts((prev) => prev.filter((p) => p.id !== id));
     };
 
-    // ✅ sesuai backend: this.server.emit("settings:update", settingsRow)
     const onSettingsUpdate = (row: any) => {
       const s = normalizeSettings(row);
-      if (typeof s.ticker_text === "string") setTickerText(s.ticker_text);
-      if (s.slide_duration_ms !== undefined) {
-        const n = Number(s.slide_duration_ms);
-        if (!Number.isNaN(n)) setSlideDurationMs(Math.max(500, n));
-      }
+      setTickerText(String(s.ticker_text || ""));
+
+      const sd = Number(s.slide_duration_ms || 8000);
+      if (!Number.isNaN(sd)) setSlideDurationMs(Math.max(500, sd));
+
+      const mi = Number(s.media_interval_ms || 15000);
+      if (!Number.isNaN(mi)) setMediaIntervalMs(Math.max(500, mi));
     };
 
     socket.on("post:upsert", onUpsert);
@@ -499,7 +554,7 @@ export default function LandingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slides.length]);
 
-  // Slider timer: pakai slideDurationMs dari settings
+  // Slider timer: pakai slideDurationMs (khusus perpindahan tipe slide)
   useEffect(() => {
     if (timerRef.current) window.clearInterval(timerRef.current);
     timerRef.current = null;
@@ -520,8 +575,8 @@ export default function LandingPage() {
   const activeSlide = slides[slideIdx] || null;
 
   return (
-    <main className="min-h-screen bg-[#4682B4] text-white p-6">
-      <div className="mx-auto max-w-6xl space-y-4">
+    <main className="min-h-screen bg-[#0047AB] text-white p-6">
+      <div className="mx-auto max-w-full space-y-4">
         <TopBar
           dayDateText={dayDateText}
           hijriText={hijriText}
@@ -559,11 +614,12 @@ export default function LandingPage() {
                 <SlideRenderer
                   post={activeSlide.post}
                   type={activeSlide.type}
+                  mediaIntervalMs={mediaIntervalMs}
                 />
               ) : null}
             </div>
 
-            {/* Optional: dots indicator */}
+            {/* Dots */}
             {slides.length > 1 ? (
               <div className="mt-4 flex flex-wrap gap-1.5">
                 {slides.slice(0, 24).map((s, i) => (
@@ -633,14 +689,15 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* RUNNING TEXT */}
-        <RunningText
-          text={
-            tickerText?.trim()
-              ? tickerText
-              : "Selamat datang. Mohon matikan/heningkan ponsel. Jaga kebersihan dan ketertiban."
-          }
-        />
+        <div className="bottom-0 left-0">
+          <RunningText
+            text={
+              tickerText?.trim()
+                ? tickerText
+                : "Selamat datang. Mohon matikan/heningkan ponsel. Jaga kebersihan dan ketertiban."
+            }
+          />
+        </div>
       </div>
     </main>
   );

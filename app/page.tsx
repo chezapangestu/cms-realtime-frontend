@@ -5,7 +5,7 @@ import Link from "next/link";
 export default function Home() {
   return (
     // <main className="min-h-screen bg-[#4682B4] text-white flex items-center justify-center p-6">
-    <main className="min-h-screen bg-[#0F52BA] text-white flex items-center justify-center p-6">
+    <main className="min-h-screen bg-[#0047AB] text-white flex items-center justify-center p-6">
       <div className="w-full max-w-xl rounded-3xl border border-white/20 bg-white/10 backdrop-blur p-6 shadow-xl">
         <div className="text-2xl font-semibold tracking-tight">
           Pilih Halaman

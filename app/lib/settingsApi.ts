@@ -1,36 +1,29 @@
 export type CmsSettings = {
   ticker_text: string;
-  slide_duration_ms: number;
+  slide_duration_ms: number; // untuk perpindahan tipe slide (post/schedule/media/donation)
+  media_interval_ms: number; // khusus media slider (image/video)
 };
 
-// (optional) kalau mau tetap pakai tipe ini
-export type SettingsRow = { id: string; fields: Record<string, any> };
+type SettingsRow = { id: string; fields: Record<string, any> };
 
-function clampSlideDuration(input: any) {
-  const n = Number(input);
-  if (!Number.isFinite(n)) return 8000;
-  return Math.max(500, n);
-}
-
-/**
- * Bisa dipakai untuk:
- * - response GET/PUT: { id, fields: {...} }
- * - payload socket:  { id, fields } atau object flat {...}
- */
 export function normalizeSettingsFromSocket(input: any): CmsSettings {
   const fields =
     input?.fields && typeof input.fields === "object" ? input.fields : input;
 
   return {
-    ticker_text: String(fields?.ticker_text ?? ""),
-    slide_duration_ms: clampSlideDuration(fields?.slide_duration_ms ?? 8000),
+    ticker_text: String(fields?.ticker_text || ""),
+    slide_duration_ms: Math.max(500, Number(fields?.slide_duration_ms || 8000)),
+    media_interval_ms: Math.max(
+      500,
+      Number(fields?.media_interval_ms || 15000),
+    ),
   };
 }
 
 export async function fetchSettings(apiBase: string): Promise<CmsSettings> {
   const res = await fetch(`${apiBase}/settings?id=app`, { cache: "no-store" });
   if (!res.ok) throw new Error("Failed to load settings");
-  const json = await res.json();
+  const json = (await res.json()) as SettingsRow;
   return normalizeSettingsFromSocket(json);
 }
 

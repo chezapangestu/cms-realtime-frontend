@@ -2,17 +2,19 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-export function ImageSlider({
+export function VideoSlider({
   urls,
-  intervalMs = 20000,
-  fadeMs = 500,
+  intervalMs = 15000,
+  fadeMs = 600,
+  muted = true,
 }: {
   urls: string[];
   intervalMs?: number;
   fadeMs?: number;
+  muted?: boolean;
 }) {
   const safe = useMemo(
-    () => (Array.isArray(urls) ? urls.filter(Boolean) : []),
+    () => (Array.isArray(urls) ? urls.filter(Boolean).map(String) : []),
     [urls],
   );
 
@@ -24,13 +26,34 @@ export function ImageSlider({
   const intervalRef = useRef<number | null>(null);
   const timeoutRef = useRef<number | null>(null);
 
+  const activeRef = useRef<HTMLVideoElement | null>(null);
+  const nextRef = useRef<HTMLVideoElement | null>(null);
+
   useEffect(() => {
-    // reset kalau jumlah gambar berubah
     setActive(0);
     setNext(null);
     setFadeIn(false);
     lockRef.current = false;
   }, [safe.length]);
+
+  async function safePlay(el: HTMLVideoElement | null) {
+    if (!el) return;
+    try {
+      el.currentTime = 0;
+      const p = el.play();
+      if (p && typeof (p as any).catch === "function") {
+        await (p as any).catch(() => {});
+      }
+    } catch {
+      // ignore autoplay failures
+    }
+  }
+
+  useEffect(() => {
+    if (!safe.length) return;
+    safePlay(activeRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, safe.length]);
 
   useEffect(() => {
     if (safe.length <= 1) return;
@@ -43,18 +66,16 @@ export function ImageSlider({
 
       const nextIdx = (active + 1) % safe.length;
 
-      // 1) render next dulu dengan opacity-0
       setNext(nextIdx);
       setFadeIn(false);
 
-      // 2) frame berikutnya baru trigger opacity-100 (transition jalan)
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           setFadeIn(true);
+          safePlay(nextRef.current);
         });
       });
 
-      // 3) setelah fade selesai, commit active
       if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
       timeoutRef.current = window.setTimeout(() => {
         setActive(nextIdx);
@@ -76,40 +97,40 @@ export function ImageSlider({
   const nextUrl = next !== null ? safe[next] : null;
 
   return (
-    <div className="relative w-full overflow-hidden rounded-2xl border border-white/15 bg-white/10">
+    <div className="relative w-full overflow-hidden rounded-2xl border border-white/15 bg-black">
       <div className="relative aspect-video w-full">
-        {/* active */}
-        <img
-          src={activeUrl}
-          alt={`slide-${active}`}
+        <video
+          ref={activeRef}
           className="absolute inset-0 h-full w-full object-cover"
-          draggable={false}
+          src={activeUrl}
+          autoPlay
+          muted={muted}
+          playsInline
+          controls={false}
+          preload="metadata"
         />
 
-        {/* next overlay - fade in */}
         {nextUrl ? (
-          <img
-            src={nextUrl}
-            alt={`slide-${next}`}
+          <video
+            ref={nextRef}
             className={[
               "absolute inset-0 h-full w-full object-cover",
               "transition-opacity ease-out",
               fadeIn ? "opacity-100" : "opacity-0",
             ].join(" ")}
             style={{ transitionDuration: `${fadeMs}ms` }}
-            draggable={false}
-            onLoad={() => {
-              // opsional: kalau mau memastikan baru fade setelah load
-              // (kalau kamu sering lihat “cut”, uncomment 2 baris ini)
-              // setFadeIn(false);
-              // requestAnimationFrame(() => setFadeIn(true));
-            }}
+            src={nextUrl}
+            autoPlay
+            muted={muted}
+            playsInline
+            controls={false}
+            preload="metadata"
           />
         ) : null}
       </div>
 
       {safe.length > 1 ? (
-        <div className="absolute bottom-3 left-3 flex gap-1.5 rounded-full bg-black/35 px-2 py-1 backdrop-blur opacity-50">
+        <div className="absolute bottom-3 left-3 flex gap-1.5 rounded-full bg-black/35 px-2 py-1 backdrop-blur opacity-60">
           {safe.map((_, i) => {
             const on = i === (next ?? active);
             return (
