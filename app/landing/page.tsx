@@ -220,13 +220,13 @@ function PrayerCard({
     >
       <div
         className={[
-          "text-xs font-medium",
+          "text-xl font-medium",
           active ? "opacity-80" : "text-white/80",
         ].join(" ")}
       >
         {label}
       </div>
-      <div className="mt-2 text-2xl font-semibold tabular-nums">{time}</div>
+      <div className="mt-2 text-4xl font-semibold tabular-nums">{time}</div>
     </div>
   );
 }
@@ -379,9 +379,9 @@ function SlideRenderer({
     const desc = stripHtml(cleanStr(f.description_1) || "");
     return (
       <div className="rounded-2xl border border-white/15 bg-white/5 p-4">
-        <div className="text-base font-semibold">{title}</div>
+        <div className="text-4xl font-semibold">{title}</div>
         {desc ? (
-          <div className="mt-1 text-sm text-white/85 line-clamp-6">{desc}</div>
+          <div className="mt-1 text-2xl text-white/85 line-clamp-6">{desc}</div>
         ) : null}
       </div>
     );
