@@ -108,11 +108,11 @@ function LogoCenter() {
       </div>{" "}
       <div className="ml-3">
         {" "}
-        <div className="text-base font-semibold leading-tight">
+        <div className="font-semibold leading-tight text-2xl">
           {" "}
           Masjid Al Ukhuwah{" "}
         </div>{" "}
-        <div className="text-xs text-white/80">
+        <div className="text-xl text-white/80">
           {" "}
           Pesona Bali City VIew Residence{" "}
         </div>{" "}
@@ -134,8 +134,8 @@ function TopBar({
     <div className="rounded-3xl border border-white/15 bg-white/10 backdrop-blur p-4">
       <div className="grid grid-cols-3 items-center gap-3">
         <div className="min-w-0">
-          <div className="text-sm font-semibold">{dayDateText}</div>
-          <div className="mt-0.5 text-xs text-white/80">{hijriText}</div>
+          <div className="text-xl font-semibold">{dayDateText}</div>
+          <div className="mt-0.5 text-xl text-white/80">{hijriText}</div>
         </div>
 
         <LogoCenter />
@@ -145,6 +145,56 @@ function TopBar({
             <div className="text-xl font-semibold tabular-nums">{timeText}</div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ScheduleTableLanding({
+  rows,
+  title,
+  caption,
+}: {
+  rows: ScheduleRow[];
+  title: string;
+  caption?: string;
+}) {
+  if (!rows.length) return null;
+
+  return (
+    <div className="rounded-2xl border border-white/15 bg-white/5 p-4">
+      <div className="text-base font-semibold">{title}</div>
+
+      {caption ? (
+        <div className="mt-1 text-xs text-white/75">{stripHtml(caption)}</div>
+      ) : null}
+
+      <div className="mt-4 overflow-x-auto">
+        <table className="min-w-[720px] w-full border-collapse">
+          <thead className="bg-white/10 text-xs text-white/80">
+            <tr>
+              <th className="p-2 text-left font-semibold">Hari</th>
+              <th className="p-2 text-left font-semibold">Hijriah</th>
+              <th className="p-2 text-left font-semibold">Masehi</th>
+              <th className="p-2 text-left font-semibold">Nama</th>
+            </tr>
+          </thead>
+
+          <tbody className="divide-y divide-white/10 text-sm">
+            {rows.map((r, idx) => (
+              <tr key={idx} className="align-top">
+                <td className="p-2 font-medium text-white">
+                  {r.dayName || "-"}
+                </td>
+                <td className="p-2 text-white/85">{r.hijriahDay || "-"}</td>
+                <td className="p-2 text-white/85">
+                  {r.dateM ? formatDateID(r.dateM) : "-"}
+                </td>
+                <td className="p-2 text-white">{r.imamName || "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -277,6 +327,42 @@ function slideLabel(type: SlideType) {
   return "Donation";
 }
 
+type ScheduleRow = {
+  dayName?: string;
+  hijriahDay?: string;
+  dateM?: string; // ISO atau string tanggal
+  imamName?: string;
+};
+
+function formatDateID(input: string) {
+  // input biasanya "2026-02-16" atau ISO; kita bikin output "16 Feb 2026"
+  try {
+    const dt = DateTime.fromISO(input, { zone: "Asia/Jakarta" });
+    if (!dt.isValid) return input;
+    return dt.setLocale("id").toFormat("dd LLL yyyy");
+  } catch {
+    return input;
+  }
+}
+
+function parseScheduleRows(raw: string): ScheduleRow[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    // normalize key biar toleran kalau struktur beda
+    return parsed.map((x: any) => ({
+      dayName: cleanStr(x?.dayName ?? x?.day_name ?? x?.hari),
+      hijriahDay: cleanStr(x?.hijriahDay ?? x?.hijriah_day ?? x?.hijriah),
+      dateM: cleanStr(x?.dateM ?? x?.date_m ?? x?.masehi ?? x?.date),
+      imamName: cleanStr(x?.imamName ?? x?.imam_name ?? x?.name ?? x?.nama),
+    }));
+  } catch {
+    return [];
+  }
+}
+
 function SlideRenderer({
   post,
   type,
@@ -302,36 +388,13 @@ function SlideRenderer({
   }
 
   if (type === "schedule") {
-    const title = cleanStr(f.schedule_title) || "Schedule";
+    const title = cleanStr(f.schedule_title) || "Jadwal";
     const caption = cleanStr(f.schedule_caption) || "";
     const raw = cleanStr(f.schedule_json) || "[]";
 
-    let count = 0;
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) count = parsed.length;
-    } catch {
-      count = 0;
-    }
+    const rows = parseScheduleRows(raw);
 
-    return (
-      <div className="rounded-2xl border border-white/15 bg-white/5 p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="text-base font-semibold">{title}</div>
-          <div className="text-xs text-white/70">
-            {count ? `×${count}` : ""}
-          </div>
-        </div>
-        {caption ? (
-          <div className="mt-1 text-sm text-white/85 line-clamp-3">
-            {stripHtml(caption)}
-          </div>
-        ) : null}
-        <div className="mt-3 text-xs text-white/70">
-          (Preview schedule bisa kamu render lebih detail nanti)
-        </div>
-      </div>
-    );
+    return <ScheduleTableLanding rows={rows} title={title} caption={caption} />;
   }
 
   if (type === "media") {
@@ -414,18 +477,18 @@ function SlideRenderer({
   return (
     <div className="rounded-2xl border border-white/15 bg-white/5 p-4">
       <div className="text-base font-semibold">Donation</div>
-      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+      <div className="mt-3 grid gap-2 sm:grid-cols-1">
         {items.length ? (
           items.map((x) => (
             <div
               key={x.label}
               className="rounded-2xl border border-white/15 bg-white/10 p-3"
             >
-              <div className="text-xs text-white/80">{x.label}</div>
-              <div className="mt-1 text-sm font-semibold line-clamp-2">
+              <div className="text-md text-white/80">{x.label}</div>
+              <div className="mt-1 text-xl font-semibold line-clamp-2">
                 {x.title || "-"}
               </div>
-              <div className="mt-1 text-xs text-white/70 tabular-nums">
+              <div className="mt-1 text-xl text-white/70 tabular-nums">
                 {x.amount > 0 ? formatIDR(x.amount) : ""}
               </div>
               {x.targetEnabled && x.target > 0
@@ -437,7 +500,7 @@ function SlideRenderer({
                     );
                     return (
                       <div className="mt-3">
-                        <div className="flex items-center justify-between text-[11px] text-white/80 font-semibold">
+                        <div className="flex items-center justify-between text-lg text-white/80 font-semibold">
                           <span>Target {formatIDR(x.target)}</span>
                           <span className="tabular-nums">{progress}%</span>
                         </div>
@@ -449,7 +512,7 @@ function SlideRenderer({
                           />
                         </div>
 
-                        <div className="mt-2 text-[11px] text-white/75 tabular-nums">
+                        <div className="mt-2 text-lg text-white/75 tabular-nums">
                           {formatIDR(x.amount)} / {formatIDR(x.target)}
                         </div>
                       </div>
@@ -640,7 +703,8 @@ export default function LandingPage() {
   const activeSlide = slides[slideIdx] || null;
 
   return (
-    <main className="min-h-screen bg-[#0047AB] text-white p-6">
+    // <main className="min-h-screen bg-[#0047AB] text-white p-6">
+    <main className="min-h-screen bg-[url('/background-3.jpg')] bg-cover text-white p-6">
       <div className="mx-auto max-w-full space-y-4">
         <TopBar
           dayDateText={dayDateText}
