@@ -173,24 +173,26 @@ function ScheduleTableLanding({
         <table className="min-w-[720px] w-full border-collapse">
           <thead className="bg-white/10 text-xs text-white/80">
             <tr>
-              <th className="p-2 text-left font-semibold">Hari</th>
-              <th className="p-2 text-left font-semibold">Hijriah</th>
-              <th className="p-2 text-left font-semibold">Masehi</th>
-              <th className="p-2 text-left font-semibold">Nama</th>
+              <th className="p-2 text-left text-xl font-semibold">Hari</th>
+              <th className="p-2 text-left text-xl font-semibold">Hijriah</th>
+              <th className="p-2 text-left text-xl font-semibold">Masehi</th>
+              <th className="p-2 text-left text-xl font-semibold">Nama</th>
             </tr>
           </thead>
 
           <tbody className="divide-y divide-white/10 text-sm">
             {rows.map((r, idx) => (
               <tr key={idx} className="align-top">
-                <td className="p-2 font-medium text-white">
+                <td className="p-2 font-medium text-white text-2xl">
                   {r.dayName || "-"}
                 </td>
-                <td className="p-2 text-white/85">{r.hijriahDay || "-"}</td>
-                <td className="p-2 text-white/85">
+                <td className="p-2 text-white/85 text-2xl">
+                  {r.hijriahDay || "-"}
+                </td>
+                <td className="p-2 text-white/85 text-2xl">
                   {r.dateM ? formatDateID(r.dateM) : "-"}
                 </td>
-                <td className="p-2 text-white">{r.imamName || "-"}</td>
+                <td className="p-2 text-white text-2xl">{r.imamName || "-"}</td>
               </tr>
             ))}
           </tbody>
@@ -484,11 +486,11 @@ function SlideRenderer({
               key={x.label}
               className="rounded-2xl border border-white/15 bg-white/10 p-3"
             >
-              <div className="text-md text-white/80">{x.label}</div>
-              <div className="mt-1 text-xl font-semibold line-clamp-2">
+              <div className="text-xl text-white/80">{x.label}</div>
+              <div className="mt-1 text-4xl font-semibold line-clamp-2">
                 {x.title || "-"}
               </div>
-              <div className="mt-1 text-xl text-white/70 tabular-nums">
+              <div className="mt-1 text-6xl font-bold text-white/70 tabular-nums">
                 {x.amount > 0 ? formatIDR(x.amount) : ""}
               </div>
               {x.targetEnabled && x.target > 0
@@ -500,7 +502,7 @@ function SlideRenderer({
                     );
                     return (
                       <div className="mt-3">
-                        <div className="flex items-center justify-between text-lg text-white/80 font-semibold">
+                        <div className="flex items-center justify-between text-3xl text-white/80 font-semibold">
                           <span>Target {formatIDR(x.target)}</span>
                           <span className="tabular-nums">{progress}%</span>
                         </div>
@@ -512,7 +514,7 @@ function SlideRenderer({
                           />
                         </div>
 
-                        <div className="mt-2 text-lg text-white/75 tabular-nums">
+                        <div className="mt-2 text-3xl text-white/75 tabular-nums">
                           {formatIDR(x.amount)} / {formatIDR(x.target)}
                         </div>
                       </div>
@@ -704,7 +706,7 @@ export default function LandingPage() {
 
   return (
     // <main className="min-h-screen bg-[#0047AB] text-white p-6">
-    <main className="min-h-screen bg-[url('/background-3.jpg')] bg-cover text-white p-6">
+    <main className="min-h-screen bg-[url('/background-4.jpg')] bg-cover text-white p-6">
       <div className="mx-auto max-w-full space-y-4">
         <TopBar
           dayDateText={dayDateText}
