@@ -34,6 +34,30 @@ const PRAYER_ORDER: PrayerKey[] = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"];
 type SlideType = "post" | "schedule" | "media" | "donation";
 type SlideItem = { key: string; post: PostItem; type: SlideType };
 
+function formatIDR(n: number) {
+  try {
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
+      maximumFractionDigits: 0,
+    }).format(n || 0);
+  } catch {
+    return `Rp ${(n || 0).toLocaleString("id-ID")}`;
+  }
+}
+
+function toBool(v: any) {
+  if (typeof v === "boolean") return v;
+  const s = String(v ?? "")
+    .toLowerCase()
+    .trim();
+  return s === "true" || s === "1" || s === "yes" || s === "on";
+}
+
+function clamp(n: number, a: number, b: number) {
+  return Math.max(a, Math.min(b, n));
+}
+
 function stripHtml(html: string) {
   return (html || "").replace(/<[^>]+>/g, "").trim();
 }
@@ -159,12 +183,12 @@ function PrayerCard({
 
 function RunningText({ text }: { text: string }) {
   return (
-    <div className="rounded-2xl border border-white/15 bg-white/10 overflow-hidden">
+    <div className=" border border-white/15 bg-black overflow-hidden">
       <div className="whitespace-nowrap py-3">
-        <div className="animate-marquee inline-block px-6 text-sm font-medium text-white/95">
+        <div className="animate-marquee inline-block px-6 text-2xl font-medium text-white/95">
           {text}
         </div>
-        <div className="animate-marquee inline-block px-6 text-sm font-medium text-white/95">
+        <div className="animate-marquee inline-block px-6 text-2xl font-medium text-white/95">
           {text}
         </div>
       </div>
@@ -235,12 +259,11 @@ function getPostSlideTypes(p: PostItem): SlideType[] {
     Number(f.wakaf_amount || 0) > 0 ||
     cleanStr(f.zakat_title).length > 0 ||
     Number(f.zakat_amount || 0) > 0 ||
-    (f.infak_target_enabled === "true" &&
+    (toBool(f.infak_target_enabled) &&
       Number(f.infak_target_amount || 0) > 0) ||
-    (f.wakaf_target_enabled === "true" &&
+    (toBool(f.wakaf_target_enabled) &&
       Number(f.wakaf_target_amount || 0) > 0) ||
-    (f.zakat_target_enabled === "true" &&
-      Number(f.zakat_target_amount || 0) > 0);
+    (toBool(f.zakat_target_enabled) && Number(f.zakat_target_amount || 0) > 0);
 
   if (hasDonation) types.push("donation");
 
@@ -322,14 +345,14 @@ function SlideRenderer({
 
     return (
       <div className="rounded-2xl border border-white/15 bg-white/5 p-4">
-        <div className="flex items-center justify-between gap-3">
+        {/* <div className="flex items-center justify-between gap-3">
           <div className="text-base font-semibold">Media</div>
           <div className="text-xs text-white/70">
             <span className="font-mono">{mt}</span> • {urls.length} item
           </div>
-        </div>
+        </div> */}
 
-        <div className="mt-3">
+        <div className="">
           {isImages ? (
             <ImageSlider
               urls={urls}
@@ -358,21 +381,35 @@ function SlideRenderer({
   }
 
   // donation
-  const infakTitle = cleanStr(f.infak_title);
-  const wakafTitle = cleanStr(f.wakaf_title);
-  const zakatTitle = cleanStr(f.zakat_title);
+  type DonationItem = {
+    key: "infak" | "wakaf" | "zakat";
+    label: string;
+    title?: string;
+    amount: number;
+    targetEnabled: boolean;
+    target: number;
+  };
 
-  const infak = Number(f.infak_amount || 0);
-  const wakaf = Number(f.wakaf_amount || 0);
-  const zakat = Number(f.zakat_amount || 0);
+  const items: DonationItem[] = [];
 
-  const items: { label: string; title?: string; amount?: number }[] = [];
-  if (infakTitle || infak > 0)
-    items.push({ label: "Infak", title: infakTitle, amount: infak });
-  if (wakafTitle || wakaf > 0)
-    items.push({ label: "Wakaf", title: wakafTitle, amount: wakaf });
-  if (zakatTitle || zakat > 0)
-    items.push({ label: "Zakat", title: zakatTitle, amount: zakat });
+  const makeItem = (key: DonationItem["key"], label: string) => {
+    const title = cleanStr(f[`${key}_title`]);
+    const amount = Number(f[`${key}_amount`] || 0);
+
+    const targetEnabled = toBool(f[`${key}_target_enabled`]);
+    const target = Number(f[`${key}_target_amount`] || 0);
+
+    const shouldShow =
+      title.length > 0 || amount > 0 || (targetEnabled && target > 0);
+
+    if (!shouldShow) return;
+
+    items.push({ key, label, title, amount, targetEnabled, target });
+  };
+
+  makeItem("infak", "Infak");
+  makeItem("wakaf", "Wakaf");
+  makeItem("zakat", "Zakat");
 
   return (
     <div className="rounded-2xl border border-white/15 bg-white/5 p-4">
@@ -388,9 +425,37 @@ function SlideRenderer({
               <div className="mt-1 text-sm font-semibold line-clamp-2">
                 {x.title || "-"}
               </div>
-              <div className="mt-1 text-xs text-white/70">
-                {x.amount ? `Rp ${x.amount.toLocaleString("id-ID")}` : ""}
+              <div className="mt-1 text-xs text-white/70 tabular-nums">
+                {x.amount > 0 ? formatIDR(x.amount) : ""}
               </div>
+              {x.targetEnabled && x.target > 0
+                ? (() => {
+                    const progress = clamp(
+                      Math.round((x.amount / x.target) * 100),
+                      0,
+                      999,
+                    );
+                    return (
+                      <div className="mt-3">
+                        <div className="flex items-center justify-between text-[11px] text-white/80 font-semibold">
+                          <span>Target {formatIDR(x.target)}</span>
+                          <span className="tabular-nums">{progress}%</span>
+                        </div>
+
+                        <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-white/15">
+                          <div
+                            className="h-full rounded-full bg-white/85"
+                            style={{ width: `${clamp(progress, 0, 100)}%` }}
+                          />
+                        </div>
+
+                        <div className="mt-2 text-[11px] text-white/75 tabular-nums">
+                          {formatIDR(x.amount)} / {formatIDR(x.target)}
+                        </div>
+                      </div>
+                    );
+                  })()
+                : null}
             </div>
           ))
         ) : (
@@ -583,14 +648,15 @@ export default function LandingPage() {
           timeText={timeText}
         />
 
-        <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
+        <div className="grid gap-4 lg:grid-cols-[1.6fr_0.5fr]">
           {/* LEFT: CMS SLIDER (Post / Schedule / Media / Donation) */}
           <div className="rounded-3xl border border-white/15 bg-white/10 backdrop-blur p-4">
             <div className="flex items-end justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold">Informasi</div>
                 <div className="mt-1 text-xs text-white/80">
-                  Konten realtime dari CMS • Auto slide
+                  Dapatkan informasi terbaru seputar kegiatan, jadwal, media,
+                  dan donasi di Masjid Al Ukhuwah.
                 </div>
               </div>
 
@@ -688,16 +754,15 @@ export default function LandingPage() {
             </div>
           </div>
         </div>
-
-        <div className="bottom-0 left-0">
-          <RunningText
-            text={
-              tickerText?.trim()
-                ? tickerText
-                : "Selamat datang. Mohon matikan/heningkan ponsel. Jaga kebersihan dan ketertiban."
-            }
-          />
-        </div>
+      </div>
+      <div className="fixed bottom-0 left-0 w-full">
+        <RunningText
+          text={
+            tickerText?.trim()
+              ? tickerText
+              : "Selamat datang. Mohon matikan/heningkan ponsel. Jaga kebersihan dan ketertiban."
+          }
+        />
       </div>
     </main>
   );
