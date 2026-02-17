@@ -9,6 +9,7 @@ import { ImageSlider } from "../components/ImageSlider";
 import { VideoSlider } from "../components/VideoSlider";
 import Image from "next/image";
 import icon from "../../public/favicon.png";
+import qrinfak from "../../public/qr-infak.png";
 
 type PrayerTimes = {
   Fajr: string;
@@ -131,7 +132,7 @@ function TopBar({
   timeText: string;
 }) {
   return (
-    <div className="rounded-3xl border border-white/15 bg-white/10 backdrop-blur p-4">
+    <div className="rounded-3xl border border-white/15 bg-black/40 backdrop-blur p-4">
       <div className="grid grid-cols-3 items-center gap-3">
         <div className="min-w-0">
           <div className="text-xl font-semibold">{dayDateText}</div>
@@ -237,10 +238,10 @@ function RunningText({ text }: { text: string }) {
   return (
     <div className=" border border-white/15 bg-black overflow-hidden">
       <div className="whitespace-nowrap py-3">
-        <div className="animate-marquee inline-block px-6 text-2xl font-medium text-white/95">
+        <div className="animate-marquee inline-block px-6 text-3xl font-medium text-white/95">
           {text}
         </div>
-        <div className="animate-marquee inline-block px-6 text-2xl font-medium text-white/95">
+        <div className="animate-marquee inline-block px-6 text-3xl font-medium text-white/95">
           {text}
         </div>
       </div>
@@ -479,53 +480,60 @@ function SlideRenderer({
   return (
     <div className="rounded-2xl border border-white/15 bg-white/5 p-4">
       <div className="text-base font-semibold">Donation</div>
-      <div className="mt-3 grid gap-2 sm:grid-cols-1">
-        {items.length ? (
-          items.map((x) => (
-            <div
-              key={x.label}
-              className="rounded-2xl border border-white/15 bg-white/10 p-3"
-            >
-              <div className="text-xl text-white/80">{x.label}</div>
-              <div className="mt-1 text-4xl font-semibold line-clamp-2">
-                {x.title || "-"}
-              </div>
-              <div className="mt-1 text-6xl font-bold text-white/70 tabular-nums">
-                {x.amount > 0 ? formatIDR(x.amount) : ""}
-              </div>
-              {x.targetEnabled && x.target > 0
-                ? (() => {
-                    const progress = clamp(
-                      Math.round((x.amount / x.target) * 100),
-                      0,
-                      999,
-                    );
-                    return (
-                      <div className="mt-3">
-                        <div className="flex items-center justify-between text-3xl text-white/80 font-semibold">
-                          <span>Target {formatIDR(x.target)}</span>
-                          <span className="tabular-nums">{progress}%</span>
-                        </div>
+      <div className="flex gap-2 sm:grid-cols-2 justify-between">
+        <div className="mt-3 grid gap-2 sm:grid-cols-1">
+          {items.length ? (
+            items.map((x) => (
+              <div
+                key={x.label}
+                className="rounded-2xl border border-white/15 bg-white/10 p-3"
+              >
+                <div className="text-xl text-white/80">{x.label}</div>
+                <div className="mt-1 text-4xl font-semibold line-clamp-2">
+                  {x.title || "-"}
+                </div>
+                <div className="mt-1 text-6xl font-bold text-red-600 tabular-nums">
+                  {x.amount > 0 ? formatIDR(x.amount) : ""}
+                </div>
+                {x.targetEnabled && x.target > 0
+                  ? (() => {
+                      const progress = clamp(
+                        Math.round((x.amount / x.target) * 100),
+                        0,
+                        999,
+                      );
+                      return (
+                        <div className="mt-3">
+                          <div className="flex items-center justify-between text-4xl text-[#cbf826] font-semibold">
+                            <span>Target {formatIDR(x.target)}</span>
+                            <span className="tabular-nums">{progress}%</span>
+                          </div>
 
-                        <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-white/15">
-                          <div
-                            className="h-full rounded-full bg-white/85"
-                            style={{ width: `${clamp(progress, 0, 100)}%` }}
-                          />
-                        </div>
+                          <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-white/15">
+                            <div
+                              className="h-full rounded-full bg-white/85"
+                              style={{ width: `${clamp(progress, 0, 100)}%` }}
+                            />
+                          </div>
 
-                        <div className="mt-2 text-3xl text-white/75 tabular-nums">
-                          {formatIDR(x.amount)} / {formatIDR(x.target)}
+                          <div className="mt-2 text-3xl text-white/75 tabular-nums">
+                            {formatIDR(x.amount)} / {formatIDR(x.target)}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })()
-                : null}
+                      );
+                    })()
+                  : null}
+              </div>
+            ))
+          ) : (
+            <div className="text-sm text-white/80">
+              Tidak ada data donation.
             </div>
-          ))
-        ) : (
-          <div className="text-sm text-white/80">Tidak ada data donation.</div>
-        )}
+          )}
+        </div>
+        <div className="mt-2">
+          <Image src={qrinfak} width={400} height={400} alt="QR Infak" />
+        </div>
       </div>
     </div>
   );
@@ -716,7 +724,7 @@ export default function LandingPage() {
 
         <div className="grid gap-4 lg:grid-cols-[1.6fr_0.5fr]">
           {/* LEFT: CMS SLIDER (Post / Schedule / Media / Donation) */}
-          <div className="rounded-3xl border border-white/15 bg-white/10 backdrop-blur p-4">
+          <div className="rounded-3xl border border-white/15 bg-black/40 backdrop-blur p-4">
             <div className="flex items-end justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold">Informasi</div>
@@ -778,7 +786,7 @@ export default function LandingPage() {
           </div>
 
           {/* RIGHT: PRAYER TIMES */}
-          <div className="rounded-3xl border border-white/15 bg-white/10 backdrop-blur p-4">
+          <div className="rounded-3xl border border-white/15 bg-black/40 backdrop-blur p-4">
             <div>
               <div className="text-sm font-semibold">Waktu Sholat</div>
               <div className="mt-1 text-xs text-white/80">
