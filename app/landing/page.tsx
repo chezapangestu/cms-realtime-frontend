@@ -143,7 +143,9 @@ function TopBar({
 
         <div className="flex justify-end">
           <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-2">
-            <div className="text-xl font-semibold tabular-nums">{timeText}</div>
+            <div className="text-4xl font-semibold tabular-nums">
+              {timeText}
+            </div>
           </div>
         </div>
       </div>
@@ -161,6 +163,8 @@ function ScheduleTableLanding({
   caption?: string;
 }) {
   if (!rows.length) return null;
+
+  const today = DateTime.now().toFormat("yyyy-MM-dd");
 
   return (
     <div className="rounded-2xl border border-white/15 bg-white/5 p-4">
@@ -182,20 +186,31 @@ function ScheduleTableLanding({
           </thead>
 
           <tbody className="divide-y divide-white/10 text-sm">
-            {rows.map((r, idx) => (
-              <tr key={idx} className="align-top">
-                <td className="p-2 font-medium text-white text-2xl">
-                  {r.dayName || "-"}
-                </td>
-                <td className="p-2 text-white/85 text-2xl">
-                  {r.hijriahDay || "-"}
-                </td>
-                <td className="p-2 text-white/85 text-2xl">
-                  {r.dateM ? formatDateID(r.dateM) : "-"}
-                </td>
-                <td className="p-2 text-white text-2xl">{r.imamName || "-"}</td>
-              </tr>
-            ))}
+            {rows.map((r, idx) => {
+              const isToday = r.dateM === today; // Cek apakah tanggal sama dengan hari ini
+
+              return (
+                <tr
+                  key={idx}
+                  className={`align-top ${
+                    isToday ? "bg-yellow-600" : "" // Highlight jika sama dengan hari ini
+                  }`}
+                >
+                  <td className="p-2 font-medium text-white text-2xl">
+                    {r.dayName || "-"}
+                  </td>
+                  <td className="p-2 text-white/85 text-2xl">
+                    {r.hijriahDay || "-"}
+                  </td>
+                  <td className="p-2 text-white/85 text-2xl">
+                    {r.dateM ? formatDateID(r.dateM) : "-"}
+                  </td>
+                  <td className="p-2 text-white text-2xl">
+                    {r.imamName || "-"}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -796,9 +811,19 @@ export default function LandingPage() {
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <PrayerCard
+                label="Imsak"
+                time={prayer?.Imsak ?? "--:--"}
+                active={currentPrayer === "Fajr"}
+              />
+              <PrayerCard
                 label="Subuh"
                 time={prayer?.Fajr ?? "--:--"}
                 active={currentPrayer === "Fajr"}
+              />
+              <PrayerCard
+                label="Syuruq"
+                time={prayer?.Sunrise ?? "--:--"}
+                active={false}
               />
               <PrayerCard
                 label="Dzuhur"
@@ -819,11 +844,6 @@ export default function LandingPage() {
                 label="Isya"
                 time={prayer?.Isha ?? "--:--"}
                 active={currentPrayer === "Isha"}
-              />
-              <PrayerCard
-                label="Syuruq"
-                time={prayer?.Sunrise ?? "--:--"}
-                active={false}
               />
             </div>
           </div>
