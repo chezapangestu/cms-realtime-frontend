@@ -10,6 +10,7 @@ import { VideoSlider } from "../components/VideoSlider";
 import Image from "next/image";
 import icon from "../../public/favicon.png";
 import qrinfak from "../../public/qr-infak.png";
+import { sanitizeHtml } from "../lib/sanitize";
 
 type PrayerTimes = {
   Fajr: string;
@@ -150,6 +151,22 @@ function TopBar({
         </div>
       </div>
     </div>
+  );
+}
+
+function DescriptionView({ html }: { html: string }) {
+  const safe = sanitizeHtml(html || "");
+  return (
+    <div
+      className={[
+        "prose prose-zinc max-w-none",
+        "prose-p:my-2 prose-li:my-1",
+        "prose-a:text-zinc-900 prose-a:underline",
+        "prose-strong:text-zinc-900",
+        "prose-blockquote:border-l-zinc-200 prose-blockquote:text-zinc-600",
+      ].join(" ")}
+      dangerouslySetInnerHTML={{ __html: safe }}
+    />
   );
 }
 
@@ -394,12 +411,15 @@ function SlideRenderer({
 
   if (type === "post") {
     const title = cleanStr(f.title_1) || "Untitled";
-    const desc = stripHtml(cleanStr(f.description_1) || "");
+    // const desc = stripHtml(cleanStr(f.description_1) || "");
+    const desc = f.description_1 || "";
     return (
       <div className="rounded-2xl border border-white/15 bg-white/5 p-4">
         <div className="text-4xl font-semibold">{title}</div>
         {desc ? (
-          <div className="mt-1 text-2xl text-white/85 line-clamp-6">{desc}</div>
+          <div className="mt-1 text-2xl text-white/85 line-clamp-6">
+            <DescriptionView html={desc} />
+          </div>
         ) : null}
       </div>
     );
