@@ -99,7 +99,7 @@ function LogoCenter() {
   return (
     <div className="flex items-center justify-center">
       {" "}
-      <div className="h-10 w-10 rounded-2xl bg-white/15 border border-white/20">
+      <div className="h-10 w-10 rounded-2xl bg-white/15 border border-white/20 sm:block hidden">
         {" "}
         <Image
           src={icon}
@@ -110,11 +110,11 @@ function LogoCenter() {
       </div>{" "}
       <div className="ml-3">
         {" "}
-        <div className="font-semibold leading-tight text-2xl">
+        <div className="font-semibold leading-tight sm:text-2xl">
           {" "}
           Masjid Al Ukhuwah{" "}
         </div>{" "}
-        <div className="text-xl text-white/80">
+        <div className="sm:text-xl text-white/80">
           {" "}
           Pesona Bali City VIew Residence{" "}
         </div>{" "}
@@ -133,18 +133,18 @@ function TopBar({
   timeText: string;
 }) {
   return (
-    <div className="rounded-3xl border border-white/15 bg-black/40 backdrop-blur p-4">
+    <div className="rounded-3xl border border-white/15 bg-white/20 backdrop-blur p-4">
       <div className="grid grid-cols-3 items-center gap-3">
         <div className="min-w-0">
-          <div className="text-xl font-semibold">{dayDateText}</div>
-          <div className="mt-0.5 text-xl text-white/80">{hijriText}</div>
+          <div className="sm:text-xl font-semibold">{dayDateText}</div>
+          <div className="mt-0.5 sm:text-xl text-white/80">{hijriText}</div>
         </div>
 
         <LogoCenter />
 
         <div className="flex justify-end">
           <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-2">
-            <div className="text-4xl font-semibold tabular-nums">
+            <div className="sm:text-4xl font-semibold tabular-nums">
               {timeText}
             </div>
           </div>
@@ -184,21 +184,25 @@ function ScheduleTableLanding({
   const today = DateTime.now().toFormat("yyyy-MM-dd");
 
   return (
-    <div className="rounded-2xl border border-white/15 bg-white/5 p-4">
-      <div className="text-base font-semibold">{title}</div>
+    <div className="grid rounded-2xl border border-white/15 bg-white/5 p-4 overflow-auto">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="text-base font-semibold">{title}</div>
 
-      {caption ? (
-        <div className="mt-1 text-xs text-white/75">{stripHtml(caption)}</div>
-      ) : null}
+        {caption ? (
+          <div className="mt-1 text-xs text-white/75">{stripHtml(caption)}</div>
+        ) : null}
+      </div>
 
       <div className="mt-4 overflow-x-auto">
-        <table className="min-w-[720px] w-full border-collapse">
+        <table className="min-w-[820px] w-full border-collapse">
           <thead className="bg-white/10 text-xs text-white/80">
             <tr>
-              <th className="p-2 text-left text-xl font-semibold">Hari</th>
-              <th className="p-2 text-left text-xl font-semibold">Hijriah</th>
-              <th className="p-2 text-left text-xl font-semibold">Masehi</th>
-              <th className="p-2 text-left text-xl font-semibold">Nama</th>
+              <th className="p-2 text-left sm:text-xl font-semibold">Hari</th>
+              <th className="p-2 text-left sm:text-xl font-semibold">
+                Hijriah
+              </th>
+              <th className="p-2 text-left sm:text-xl font-semibold">Masehi</th>
+              <th className="p-2 text-left sm:text-xl font-semibold">Nama</th>
             </tr>
           </thead>
 
@@ -210,19 +214,19 @@ function ScheduleTableLanding({
                 <tr
                   key={idx}
                   className={`align-top ${
-                    isToday ? "bg-yellow-600" : "" // Highlight jika sama dengan hari ini
+                    isToday ? "bg-cyan-600" : "" // Highlight jika sama dengan hari ini
                   }`}
                 >
-                  <td className="p-2 font-medium text-white text-2xl">
+                  <td className="p-2 font-medium text-white sm:text-2xl">
                     {r.dayName || "-"}
                   </td>
-                  <td className="p-2 text-white/85 text-2xl">
+                  <td className="p-2 text-white/85 sm:text-2xl">
                     {r.hijriahDay || "-"}
                   </td>
-                  <td className="p-2 text-white/85 text-2xl">
+                  <td className="p-2 text-white/85 sm:text-2xl">
                     {r.dateM ? formatDateID(r.dateM) : "-"}
                   </td>
-                  <td className="p-2 text-white text-2xl">
+                  <td className="p-2 text-white sm:text-2xl">
                     {r.imamName || "-"}
                   </td>
                 </tr>
@@ -415,9 +419,9 @@ function SlideRenderer({
     const desc = f.description_1 || "";
     return (
       <div className="rounded-2xl border border-white/15 bg-white/5 p-4">
-        <div className="text-4xl font-semibold">{title}</div>
+        <div className="sm:text-4xl font-semibold">{title}</div>
         {desc ? (
-          <div className="mt-1 text-2xl text-white/85 line-clamp-6">
+          <div className="mt-1 sm:text-2xl text-white/85 line-clamp-6">
             <DescriptionView html={desc} />
           </div>
         ) : null}
@@ -515,7 +519,7 @@ function SlideRenderer({
   return (
     <div className="rounded-2xl border border-white/15 bg-white/5 p-4">
       <div className="text-base font-semibold">Donation</div>
-      <div className="flex gap-2 sm:grid-cols-2 justify-between">
+      <div className="grid sm:grid-cols-2 justify-items-end ">
         <div className="mt-3 grid gap-2 sm:grid-cols-1">
           {items.length ? (
             items.map((x) => (
@@ -523,11 +527,11 @@ function SlideRenderer({
                 key={x.label}
                 className="rounded-2xl border border-white/15 bg-white/10 p-3"
               >
-                <div className="text-xl text-white/80">{x.label}</div>
-                <div className="mt-1 text-4xl font-semibold line-clamp-2">
+                <div className="sm:text-xl text-white/80">{x.label}</div>
+                <div className="mt-1 sm:text-4xl font-semibold line-clamp-2">
                   {x.title || "-"}
                 </div>
-                <div className="mt-1 text-6xl font-bold text-red-600 tabular-nums">
+                <div className="mt-1 sm:text-6xl font-bold text-red-600 tabular-nums">
                   {x.amount > 0 ? formatIDR(x.amount) : ""}
                 </div>
                 {x.targetEnabled && x.target > 0
@@ -539,7 +543,7 @@ function SlideRenderer({
                       );
                       return (
                         <div className="mt-3">
-                          <div className="flex items-center justify-between text-4xl text-[#cbf826] font-semibold">
+                          <div className="flex items-center justify-between sm:text-4xl text-[#cbf826] font-semibold">
                             <span>Target {formatIDR(x.target)}</span>
                             <span className="tabular-nums">{progress}%</span>
                           </div>
@@ -551,7 +555,7 @@ function SlideRenderer({
                             />
                           </div>
 
-                          <div className="mt-2 text-3xl text-white/75 tabular-nums">
+                          <div className="mt-2 sm:text-3xl text-white/75 tabular-nums">
                             {formatIDR(x.amount)} / {formatIDR(x.target)}
                           </div>
                         </div>
@@ -833,7 +837,7 @@ export default function LandingPage() {
               <PrayerCard
                 label="Imsak"
                 time={prayer?.Imsak ?? "--:--"}
-                active={currentPrayer === "Fajr"}
+                active={false}
               />
               <PrayerCard
                 label="Subuh"

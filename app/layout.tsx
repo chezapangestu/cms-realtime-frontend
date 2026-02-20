@@ -1,8 +1,8 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "Realtime CMS",
-  description: "CMS realtime images/video",
+  title: "Landing Masjid Al-Ukhuwah PBCVR",
+  description: "Informasi seputar Masjid Al-Ukhuwah PBCVR",
 };
 
 export default function RootLayout({

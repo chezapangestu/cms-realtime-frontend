@@ -148,9 +148,9 @@ export default function AdminPage() {
   const [createSchedule, setCreateSchedule] = useState<ScheduleRow[]>([]);
   const [editSchedule, setEditSchedule] = useState<ScheduleRow[]>([]);
 
-  useEffect(() => {
-    if (editing) setEditTab("content");
-  }, [editing]);
+  // useEffect(() => {
+  //   if (editing) setEditTab("content");
+  // }, [editing]);
 
   const fieldPairs = useMemo(
     () => Array.from({ length: 10 }).map((_, i) => i + 1),
@@ -159,6 +159,75 @@ export default function AdminPage() {
 
   function hasAnyText(fields: Record<string, string>) {
     return Object.values(fields).some((v) => cleanStr(v).length > 0);
+  }
+
+  function hasContentText(fields: Record<string, string> | undefined) {
+    const f = fields || {};
+    return Object.keys(f).some((k) => {
+      const v = cleanStr(f[k] || "");
+      return (
+        (k.startsWith("title_") || k.startsWith("description_")) && v.length > 0
+      );
+    });
+  }
+
+  function hasDonationFields(fields: Record<string, string> | undefined) {
+    const f = fields || {};
+
+    const hasInfak =
+      cleanStr(f.infak_title).length > 0 ||
+      Number(f.infak_amount || 0) > 0 ||
+      (f.infak_target_enabled === "true" &&
+        Number(f.infak_target_amount || 0) > 0);
+
+    const hasWakaf =
+      cleanStr(f.wakaf_title).length > 0 ||
+      Number(f.wakaf_amount || 0) > 0 ||
+      (f.wakaf_target_enabled === "true" &&
+        Number(f.wakaf_target_amount || 0) > 0);
+
+    const hasZakat =
+      cleanStr(f.zakat_title).length > 0 ||
+      Number(f.zakat_amount || 0) > 0 ||
+      (f.zakat_target_enabled === "true" &&
+        Number(f.zakat_target_amount || 0) > 0);
+
+    return hasInfak || hasWakaf || hasZakat;
+  }
+
+  function hasSchedule(fields: Record<string, string> | undefined) {
+    const f = fields || {};
+    const scheduleCount = getScheduleCountFromFields(f);
+
+    // optional: kalau ada meta schedule tapi row kosong
+    const hasMeta =
+      cleanStr(f[SCHEDULE_TITLE_KEY]).length > 0 ||
+      cleanStr(f[SCHEDULE_CAPTION_KEY]).length > 0;
+
+    return scheduleCount > 0 || hasMeta;
+  }
+
+  function hasLayout(fields: Record<string, string> | undefined) {
+    const f = fields || {};
+    return (
+      cleanStr(f.display_order).length > 0 || f.layout_full_span === "true"
+    );
+  }
+
+  function getInitialEditTab(p: PostItem): EditTab {
+    const f = p.fields || {};
+    const mediaCount = Array.isArray(p.media_urls)
+      ? p.media_urls.filter(Boolean).length
+      : 0;
+
+    // PRIORITAS (silakan ubah urutannya kalau mau):
+    if (hasContentText(f)) return "content";
+    if (hasSchedule(f)) return "schedule";
+    if (mediaCount > 0) return "media";
+    if (hasDonationFields(f)) return "donation";
+    if (hasLayout(f)) return "layout";
+
+    return "content";
   }
 
   async function refreshList() {
@@ -245,12 +314,13 @@ export default function AdminPage() {
     setEditFields({ ...makeEmptyFields(), ...(p.fields || {}) });
     setEditVisibleBlocks(computeMaxFilledBlock(p.fields));
     setEditSchedule(parseScheduleFromFields(p.fields));
-    setEditTab("content");
+
+    // ✅ initial tab otomatis berdasarkan isi post
+    setEditTab(getInitialEditTab(p));
 
     const mt = (p.media_type as MediaType | null) || "images";
     setEditMediaType(mt);
 
-    // clear selected replacement media
     setEditImages(null);
     setEditVideo(null);
   }
