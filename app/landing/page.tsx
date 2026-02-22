@@ -298,6 +298,10 @@ function normalizeSettings(input: any) {
       500,
       Number(fields?.media_interval_ms || 15000),
     ),
+    landing_background_url:
+      typeof fields?.landing_background_url === "string"
+        ? fields.landing_background_url
+        : "",
   };
 }
 
@@ -598,6 +602,8 @@ export default function LandingPage() {
   const [slideIdx, setSlideIdx] = useState(0);
   const timerRef = useRef<number | null>(null);
 
+  const [landingBackgroundUrl, setLandingBackgroundUrl] = useState<string>("");
+
   // Clock tick
   useEffect(() => {
     const t = setInterval(() => {
@@ -627,6 +633,8 @@ export default function LandingPage() {
 
       const mi = Number(s.media_interval_ms || 15000);
       setMediaIntervalMs(!Number.isNaN(mi) ? Math.max(500, mi) : 15000);
+
+      setLandingBackgroundUrl(String(s.landing_background_url || ""));
     } catch {
       // ignore
     }
@@ -670,6 +678,8 @@ export default function LandingPage() {
 
       const mi = Number(s.media_interval_ms || 15000);
       if (!Number.isNaN(mi)) setMediaIntervalMs(Math.max(500, mi));
+
+      setLandingBackgroundUrl(String(s.landing_background_url || ""));
     };
 
     socket.on("post:upsert", onUpsert);
@@ -751,9 +761,19 @@ export default function LandingPage() {
 
   const activeSlide = slides[slideIdx] || null;
 
+  const resolvedBackgroundUrl =
+    landingBackgroundUrl?.trim() || "/background-4.jpg";
+
+  const mainBgStyle = {
+    backgroundImage: `url("${resolvedBackgroundUrl.replace(/"/g, '\\"')}")`,
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    backgroundRepeat: "no-repeat",
+  } as const;
+
   return (
     // <main className="min-h-screen bg-[#0047AB] text-white p-6">
-    <main className="min-h-screen bg-[url('/background-4.jpg')] bg-cover text-white p-6">
+    <main className="min-h-screen text-white p-6" style={mainBgStyle}>
       <div className="mx-auto max-w-full space-y-4">
         <TopBar
           dayDateText={dayDateText}

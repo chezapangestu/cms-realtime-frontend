@@ -6,6 +6,7 @@ import {
   updateSettings,
   type CmsSettings,
   normalizeSettingsFromSocket,
+  uploadLandingBackground,
 } from "../../../../lib/settingsApi";
 
 import { useSocket } from "../../posts/_lib/socket";
@@ -33,6 +34,11 @@ export function SettingsEditor({
   // khusus interval media slider (image/video)
   const [mediaIntervalMs, setMediaIntervalMs] = useState<number>(15000);
 
+  // NEW: landing background
+  const [landingBackgroundUrl, setLandingBackgroundUrl] = useState<string>("");
+  const [backgroundFile, setBackgroundFile] = useState<File | null>(null);
+  const [uploadingBackground, setUploadingBackground] = useState(false);
+
   async function load() {
     setLoading(true);
     try {
@@ -40,6 +46,7 @@ export function SettingsEditor({
       setTickerText(s.ticker_text || "");
       setSlideDurationMs(Number(s.slide_duration_ms || 8000));
       setMediaIntervalMs(Number(s.media_interval_ms || 15000));
+      setLandingBackgroundUrl(String(s.landing_background_url || ""));
       pushStatus("Settings loaded.");
     } catch (e: any) {
       pushError(e?.message || "Failed to load settings");
@@ -68,12 +75,54 @@ export function SettingsEditor({
           500,
           Number.isFinite(mediaIntervalMs) ? mediaIntervalMs : 15000,
         ),
+        landing_background_url: landingBackgroundUrl.trim(),
       };
 
       await updateSettings(apiBase, payload);
       pushStatus("Saved.");
     } catch (e: any) {
       pushError(e?.message || "Save failed");
+    }
+  }
+
+  async function handleUploadBackground() {
+    if (disabled || loading) return;
+    if (!backgroundFile) {
+      pushError("Please choose an image file first.");
+      return;
+    }
+
+    // Validasi ringan di client
+    const allowed = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
+    if (!allowed.includes(backgroundFile.type)) {
+      pushError("Only JPG, PNG, or WEBP images are allowed.");
+      return;
+    }
+
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (backgroundFile.size > maxSize) {
+      pushError("Image is too large. Max size is 10MB.");
+      return;
+    }
+
+    try {
+      setUploadingBackground(true);
+      pushStatus("Uploading background image...");
+
+      const result = await uploadLandingBackground(apiBase, backgroundFile);
+
+      if (!result?.url) {
+        throw new Error("Upload succeeded but URL was not returned");
+      }
+
+      setLandingBackgroundUrl(result.url);
+      setBackgroundFile(null);
+
+      pushStatus("Background uploaded. Click Save to apply.");
+    } catch (e: any) {
+      pushError(e?.message || "Failed to upload background");
+    } finally {
+      setUploadingBackground(false);
     }
   }
 
@@ -89,6 +138,7 @@ export function SettingsEditor({
       setTickerText(s.ticker_text || "");
       setSlideDurationMs(Number(s.slide_duration_ms || 8000));
       setMediaIntervalMs(Number(s.media_interval_ms || 15000));
+      setLandingBackgroundUrl(String(s.landing_background_url || ""));
       pushStatus("Settings updated (realtime).");
     };
 
@@ -98,8 +148,95 @@ export function SettingsEditor({
     };
   }, [socket, pushStatus]);
 
+  const previewBackgroundUrl =
+    landingBackgroundUrl?.trim() || "/background-4.jpg";
+
   return (
     <div className="grid gap-4">
+      {/* LANDING BACKGROUND */}
+      <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+        <div className="text-sm font-semibold text-zinc-900">
+          Landing Background
+        </div>
+        <div className="mt-1 text-xs text-zinc-500">
+          Background utama untuk halaman landing. Bisa upload gambar atau isi
+          URL manual.
+        </div>
+
+        <div
+          className="mt-3 h-40 w-full rounded-xl border border-zinc-200 bg-zinc-100"
+          style={{
+            backgroundImage: `url("${previewBackgroundUrl.replace(/"/g, '\\"')}")`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            backgroundRepeat: "no-repeat",
+          }}
+        />
+
+        <div className="mt-3 grid gap-2">
+          <label className="text-sm font-medium text-zinc-800">
+            Background URL
+          </label>
+          <input
+            type="text"
+            value={landingBackgroundUrl}
+            disabled={disabled || loading || uploadingBackground}
+            onChange={(e) => setLandingBackgroundUrl(e.target.value)}
+            className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-400 disabled:opacity-60"
+            placeholder="https://... atau /background-4.jpg"
+          />
+          <div className="text-xs text-zinc-500">
+            Kosongkan untuk memakai fallback background lokal.
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto_auto_auto] sm:items-end">
+          <div className="grid gap-2">
+            <label className="text-sm font-medium text-zinc-800">
+              Upload image (JPG/PNG/WEBP)
+            </label>
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/jpg,image/webp"
+              disabled={disabled || loading || uploadingBackground}
+              onChange={(e) => {
+                const file = e.target.files?.[0] ?? null;
+                setBackgroundFile(file);
+              }}
+              className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-medium disabled:opacity-60"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={handleUploadBackground}
+            disabled={disabled || loading || uploadingBackground}
+            className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-60"
+          >
+            {uploadingBackground ? "Uploading..." : "Upload"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setLandingBackgroundUrl("")}
+            disabled={disabled || loading || uploadingBackground}
+            className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-50 disabled:opacity-60"
+          >
+            Reset URL
+          </button>
+
+          <button
+            type="button"
+            onClick={save}
+            disabled={disabled || loading || uploadingBackground}
+            className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60"
+          >
+            Save
+          </button>
+        </div>
+      </div>
+
+      {/* RUNNING TEXT */}
       <div className="rounded-2xl border border-zinc-200 bg-white p-4">
         <div className="text-sm font-semibold text-zinc-900">
           Landing Running Text

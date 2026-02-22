@@ -37,7 +37,7 @@ export default function AdminSettingsPage() {
           Admin Settings
         </div>
         <div className="mt-1 text-xs text-zinc-500">
-          Running text landing + durasi slider.
+          Running text landing, background image, dan durasi slider.
         </div>
 
         <div className="mt-4">
