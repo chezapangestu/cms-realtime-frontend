@@ -535,7 +535,7 @@ function SlideRenderer({
                 <div className="mt-1 sm:text-4xl font-semibold line-clamp-2">
                   {x.title || "-"}
                 </div>
-                <div className="mt-1 sm:text-6xl font-bold text-red-600 tabular-nums">
+                <div className="mt-1 sm:text-6xl font-bold text-[#FDDA0D] tabular-nums">
                   {x.amount > 0 ? formatIDR(x.amount) : ""}
                 </div>
                 {x.targetEnabled && x.target > 0
