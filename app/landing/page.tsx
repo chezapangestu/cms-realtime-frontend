@@ -185,11 +185,11 @@ function ScheduleTableLanding({
 
   return (
     <div className="grid rounded-2xl border border-white/15 bg-white/5 p-4 overflow-auto">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-wrap flex-col items-start justify-between gap-3">
         <div className="text-base font-semibold">{title}</div>
 
         {caption ? (
-          <div className="mt-1 text-xs text-white/75">{stripHtml(caption)}</div>
+          <div className="text-xs text-white/75">{stripHtml(caption)}</div>
         ) : null}
       </div>
 
@@ -434,8 +434,8 @@ function SlideRenderer({
   }
 
   if (type === "schedule") {
-    const title = cleanStr(f.schedule_title) || "Jadwal";
-    const caption = cleanStr(f.schedule_caption) || "";
+    const title = cleanStr(f.schedule_section_title) || "Jadwal";
+    const caption = cleanStr(f.schedule_section_caption) || "";
     const raw = cleanStr(f.schedule_json) || "[]";
 
     const rows = parseScheduleRows(raw);
@@ -523,8 +523,8 @@ function SlideRenderer({
   return (
     <div className="rounded-2xl border border-white/15 bg-white/5 p-4">
       <div className="text-base font-semibold">Donation</div>
-      <div className="grid sm:grid-cols-2 justify-items-end ">
-        <div className="mt-3 grid gap-2 sm:grid-cols-1">
+      <div className="grid sm:grid-cols-1 justify-items-end ">
+        <div className="mt-3 grid gap-2 sm:grid-cols-1 h-full w-full">
           {items.length ? (
             items.map((x) => (
               <div
@@ -574,9 +574,9 @@ function SlideRenderer({
             </div>
           )}
         </div>
-        <div className="mt-2">
+        {/* <div className="mt-2">
           <Image src={qrinfak} width={400} height={400} alt="QR Infak" />
-        </div>
+        </div> */}
       </div>
     </div>
   );
