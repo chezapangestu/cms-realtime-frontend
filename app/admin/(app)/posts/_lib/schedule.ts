@@ -6,7 +6,8 @@ export const SCHEDULE_CAPTION_KEY = "schedule_section_caption";
 
 export type ScheduleRow = {
   dayName: string; // "Rabu"
-  hijriahDay: number; // 1..30
+  // hijriahDay: number; // 1..30
+  hijriahDay: string; // 1 Muharram
   dateM: string; // "YYYY-MM-DD"
   imamName: string; // "Ust. ..."
 };
@@ -15,7 +16,7 @@ function normalizeRow(x: any): ScheduleRow {
   return {
     dayName: String(x?.dayName ?? "").trim(),
     // fallback typo lama: hijirahDay
-    hijriahDay: Number(x?.hijriahDay ?? x?.hijirahDay ?? 0),
+    hijriahDay: String(x?.hijriahDay ?? x?.hijirahDay ?? "").trim(),
     dateM: String(x?.dateM ?? "").trim(),
     imamName: String(x?.imamName ?? "").trim(),
   };

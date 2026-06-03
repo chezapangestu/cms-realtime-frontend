@@ -78,7 +78,7 @@ export function ScheduleEditor({
   function addRow() {
     onChange([
       ...value,
-      { dayName: "", hijriahDay: 1, dateM: "", imamName: "" },
+      { dayName: "", hijriahDay: "", dateM: "", imamName: "" },
     ]);
   }
 
@@ -88,9 +88,9 @@ export function ScheduleEditor({
 
   function sortRows() {
     const sorted = [...value].sort((a, b) => {
-      const ra = Number(a.hijriahDay || 0);
-      const rb = Number(b.hijriahDay || 0);
-      if (ra && rb && ra !== rb) return ra - rb;
+      // const ra = Number(a.hijriahDay || 0);
+      // const rb = Number(b.hijriahDay || 0);
+      // if (ra && rb && ra !== rb) return ra - rb;
 
       if (a.dateM && b.dateM) return a.dateM.localeCompare(b.dateM);
       if (a.dateM) return -1;
@@ -169,14 +169,16 @@ export function ScheduleEditor({
                   <td className="p-2">
                     <input
                       disabled={disabled}
-                      type="number"
-                      min={1}
-                      value={row.hijriahDay ?? 1}
+                      // type="number"
+                      // min={1}
+                      // value={row.hijriahDay ?? 1}
+                      value={row.hijriahDay || ""}
                       onChange={(e) =>
-                        updateRow(i, { hijriahDay: Number(e.target.value) })
+                        // updateRow(i, { hijriahDay: Number(e.target.value) })
+                        updateRow(i, { hijriahDay: e.target.value })
                       }
                       className="w-full rounded-xl border border-zinc-200 px-3 py-2 outline-none focus:border-zinc-400 disabled:opacity-60"
-                      placeholder="1"
+                      placeholder="1 Muharram"
                     />
                   </td>
 

@@ -99,7 +99,7 @@ function LogoCenter() {
   return (
     <div className="flex items-center justify-center">
       {" "}
-      <div className="h-10 w-10 rounded-2xl bg-white/15 border border-white/20 sm:block hidden">
+      <div className="h-12 w-12 rounded-2xl bg-white/15 border border-white/20 sm:block hidden">
         {" "}
         <Image
           src={icon}
@@ -136,15 +136,15 @@ function TopBar({
     <div className="rounded-3xl border border-white/15 bg-white/20 backdrop-blur p-4">
       <div className="grid grid-cols-3 items-center gap-3">
         <div className="min-w-0">
-          <div className="sm:text-xl font-semibold">{dayDateText}</div>
-          <div className="mt-0.5 sm:text-xl text-white/80">{hijriText}</div>
+          <div className="sm:text-3xl font-semibold">{dayDateText}</div>
+          <div className="mt-0.5 sm:text-2xl text-white/80">{hijriText}</div>
         </div>
 
         <LogoCenter />
 
         <div className="flex justify-end">
           <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-2">
-            <div className="sm:text-4xl font-semibold tabular-nums">
+            <div className="sm:text-6xl font-semibold tabular-nums">
               {timeText}
             </div>
           </div>
@@ -186,7 +186,7 @@ function ScheduleTableLanding({
   return (
     <div className="grid rounded-2xl border border-white/15 bg-white/5 p-4 overflow-auto">
       <div className="flex flex-wrap flex-col items-start justify-between gap-3">
-        <div className="text-base font-semibold">{title}</div>
+        <div className="sm:text-4xl font-semibold">{title}</div>
 
         {caption ? (
           <div className="text-xs text-white/75">{stripHtml(caption)}</div>
@@ -697,7 +697,7 @@ export default function LandingPage() {
     () => now.setLocale("id").toFormat("cccc, dd LLLL yyyy"),
     [now],
   );
-  const timeText = useMemo(() => now.toFormat("HH:mm"), [now]);
+  const timeText = useMemo(() => now.toFormat("hh:mm a"), [now]);
 
   const hijriText = useMemo(() => {
     if (!prayer) return "Tanggal Hijriah: -";
@@ -786,8 +786,8 @@ export default function LandingPage() {
           <div className="rounded-3xl border border-white/15 bg-black/40 backdrop-blur p-4">
             <div className="flex items-end justify-between gap-3">
               <div>
-                <div className="text-sm font-semibold">Informasi</div>
-                <div className="mt-1 text-xs text-white/80">
+                <div className="sm:text-2xl font-semibold">Informasi</div>
+                <div className="mt-1 sm:text-xl text-white/80">
                   Dapatkan informasi terbaru seputar kegiatan, jadwal, media,
                   dan donasi di Masjid Al Ukhuwah.
                 </div>
@@ -847,8 +847,8 @@ export default function LandingPage() {
           {/* RIGHT: PRAYER TIMES */}
           <div className="rounded-3xl border border-white/15 bg-black/40 backdrop-blur p-4">
             <div>
-              <div className="text-sm font-semibold">Waktu Sholat</div>
-              <div className="mt-1 text-xs text-white/80">
+              <div className="sm:text-5xl font-semibold">Waktu Sholat</div>
+              <div className="mt-1 sm:text-lg text-white/80">
                 {prayer?.Source ? `Sumber: ${prayer.Source}` : "Memuat..."}
               </div>
             </div>
