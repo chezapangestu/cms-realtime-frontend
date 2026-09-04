@@ -535,7 +535,7 @@ function SlideRenderer({
                 <div className="mt-1 sm:text-4xl font-semibold line-clamp-2">
                   {x.title || "-"}
                 </div>
-                <div className="mt-1 sm:text-6xl font-bold text-[#FDDA0D] tabular-nums">
+                <div className="mt-1 sm:text-9xl font-bold text-[#FDDA0D] tabular-nums">
                   {x.amount > 0 ? formatIDR(x.amount) : ""}
                 </div>
                 {x.targetEnabled && x.target > 0
@@ -793,11 +793,35 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <div className="text-xs text-white/70">
+              <div className="flex items-center justify-center gap-2">
+                {/* Dots */}
+                {slides.length > 1 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {slides.slice(0, 24).map((s, i) => (
+                      <button
+                        key={s.key}
+                        type="button"
+                        onClick={() => setSlideIdx(i)}
+                        className={[
+                          "h-3 w-3 rounded-full border transition",
+                          i === slideIdx
+                            ? "border-white/70 bg-white/80"
+                            : "border-white/20 bg-white/10 hover:bg-white/20",
+                        ].join(" ")}
+                        aria-label={`Go to slide ${i + 1}`}
+                      />
+                    ))}
+                    {slides.length > 24 ? (
+                      <div className="text-xs text-white/70 ml-2">
+                        +{slides.length - 24} more
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                <div className="text-xl text-white/70">
                   {slides.length ? `${slideIdx + 1}/${slides.length}` : "0/0"}
                 </div>
-                <div className="rounded-full border border-white/15 bg-white/10 px-2 py-1 text-[11px] text-white/85">
+                <div className="rounded-full border border-white/15 bg-white/10 px-2 py-1 text-xl text-white/85">
                   {activeSlide ? slideLabel(activeSlide.type) : "—"}
                 </div>
               </div>
@@ -817,31 +841,6 @@ export default function LandingPage() {
                 />
               ) : null}
             </div>
-
-            {/* Dots */}
-            {slides.length > 1 ? (
-              <div className="mt-4 flex flex-wrap gap-1.5">
-                {slides.slice(0, 24).map((s, i) => (
-                  <button
-                    key={s.key}
-                    type="button"
-                    onClick={() => setSlideIdx(i)}
-                    className={[
-                      "h-2.5 w-2.5 rounded-full border transition",
-                      i === slideIdx
-                        ? "border-white/70 bg-white/80"
-                        : "border-white/20 bg-white/10 hover:bg-white/20",
-                    ].join(" ")}
-                    aria-label={`Go to slide ${i + 1}`}
-                  />
-                ))}
-                {slides.length > 24 ? (
-                  <div className="text-xs text-white/70 ml-2">
-                    +{slides.length - 24} more
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
           </div>
 
           {/* RIGHT: PRAYER TIMES */}
