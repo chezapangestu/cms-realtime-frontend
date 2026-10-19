@@ -53,15 +53,70 @@ export function PostMediaEditor({
           </select>
         </div>
 
+        {/* {mode === "edit" ? (
+          <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+            <div className="text-sm font-medium text-zinc-800">
+              Current Media
+            </div>
+            <div
+              className="mt-3 h-64 w-full rounded-xl border border-zinc-200 bg-zinc-100"
+              style={{
+                backgroundImage: `url("${existingMediaUrls?.[0].replace(/"/g, '\\"')}")`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                backgroundRepeat: "no-repeat",
+              }}
+            />
+            <div className="mt-1 whitespace-pre-wrap text-xs text-zinc-500 break-all">
+              {(existingMediaUrls?.length ?? 0) > 0
+                ? existingMediaUrls?.join("\n")
+                : "No media attached."}
+            </div>
+          </div>
+        ) : null} */}
         {mode === "edit" ? (
           <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
             <div className="text-sm font-medium text-zinc-800">
               Current Media
             </div>
-            <div className="mt-1 whitespace-pre-wrap text-xs text-zinc-500 break-all">
-              {(existingMediaUrls?.length ?? 0) > 0
-                ? existingMediaUrls?.join("\n")
-                : "No media attached."}
+
+            {(existingMediaUrls?.length ?? 0) > 0 ? (
+              <div
+                className={`mt-3 grid gap-2 ${
+                  isImages
+                    ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-4"
+                    : "grid-cols-1"
+                }`}
+              >
+                {existingMediaUrls?.map((url, idx) => {
+                  const cleanUrl = url?.trim();
+                  if (!cleanUrl) return null;
+
+                  return isVideo ? (
+                    <video
+                      key={idx}
+                      src={cleanUrl}
+                      controls
+                      className="w-full rounded-xl border border-zinc-200 bg-black"
+                    />
+                  ) : (
+                    <img
+                      key={idx}
+                      src={cleanUrl}
+                      alt={`existing-media-${idx + 1}`}
+                      className="h-40 w-full rounded-xl border border-zinc-200 object-cover"
+                    />
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="mt-3 text-xs text-zinc-500">
+                No media attached.
+              </div>
+            )}
+
+            <div className="mt-2 whitespace-pre-wrap text-[10px] text-zinc-400 break-all">
+              {existingMediaUrls?.join("\n")}
             </div>
           </div>
         ) : null}
